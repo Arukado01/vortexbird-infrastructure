@@ -84,7 +84,8 @@ try {
         } catch { $apiReady = $false }
         try {
             $portalState = Invoke-WebRequest -Uri "$portalUrl/health" -TimeoutSec 3 -MaximumRedirection 0 -UseBasicParsing
-            $portalReady = $portalState.StatusCode -eq 200 -and $portalState.Content.Trim() -eq 'ok'
+            $portalContent = if ($portalState.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($portalState.Content) } else { [string]$portalState.Content }
+            $portalReady = $portalState.StatusCode -eq 200 -and $portalContent.Trim() -eq 'ok'
         } catch { $portalReady = $false }
         if ($apiReady -and $portalReady) { break }
         if ([DateTime]::UtcNow -lt $deadline) { Start-Sleep -Seconds 2 }
