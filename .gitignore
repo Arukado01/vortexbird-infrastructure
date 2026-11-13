@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.auto.tfvars
+!*.example.auto.tfvars
+crash.log
+.tools/
+reports/*.json
+!reports/inventory-status.json
+!reports/postgresql-schema-validation.json
+!reports/postgresql-schema-validation.json
+rendered/
+node_modules/

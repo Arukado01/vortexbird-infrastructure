@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: kong-config, namespace: vortexbird }
+data:
+  kong.yml: |
+    _format_version: "3.0"
+    services:
+      - name: api
+        url: http://backend:8080
+        connect_timeout: 1000
+        read_timeout: 10000
+        write_timeout: 10000
+        retries: 0
+        routes:
+          - { name: api-route, hosts: ["${API_HOST}"], paths: [/api], strip_path: false }
+      - name: portal
+        url: http://frontend:80
+        routes:
+          - { name: portal-route, hosts: ["${APP_HOST}"] }
+      - name: identity
+        url: http://keycloak:8080
+        routes:
+          - { name: identity-route, hosts: ["${AUTH_HOST}"], paths: [/realms, /resources], strip_path: false }
+    plugins:
+      - name: request-size-limiting
+        config: { allowed_payload_size: 1 }
+      - name: correlation-id
+        config: { header_name: X-Correlation-ID, generator: uuid, echo_downstream: true }
+      - name: rate-limiting
+        config: { minute: 1000, policy: local, limit_by: ip, fault_tolerant: false }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: kong, namespace: vortexbird }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: kong } }
+  template:
+    metadata: { labels: { app: kong } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: kong
+          image: kong:3.9.1
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+          env:
+            - { name: KONG_DATABASE, value: "off" }
+            - { name: KONG_DECLARATIVE_CONFIG, value: /kong/kong.yml }
+            - { name: KONG_ADMIN_LISTEN, value: "off" }
+            - { name: KONG_PROXY_LISTEN, value: "0.0.0.0:8000" }
+            - { name: KONG_STATUS_LISTEN, value: "0.0.0.0:8100" }
+            - { name: KONG_PREFIX, value: /tmp/kong }
+          ports: [{ name: proxy, containerPort: 8000 }, { name: status, containerPort: 8100 }]
+          resources: { requests: { cpu: 250m, memory: 256Mi }, limits: { cpu: "1", memory: 512Mi } }
+          readinessProbe: { httpGet: { path: /status/ready, port: status }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /status, port: status }, periodSeconds: 15 }
+          volumeMounts: [{ name: config, mountPath: /kong, readOnly: true }, { name: tmp, mountPath: /tmp }]
+      volumes: [{ name: config, configMap: { name: kong-config } }, { name: tmp, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: kong, namespace: vortexbird }
+spec: { selector: { app: kong }, ports: [{ port: 8000, targetPort: proxy }] }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: edge
+  namespace: vortexbird
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/certificate-arn: ${ACM_CERTIFICATE_ARN}
+    alb.ingress.kubernetes.io/wafv2-acl-arn: ${WAF_ARN}
+    alb.ingress.kubernetes.io/healthcheck-port: '8100'
+    alb.ingress.kubernetes.io/healthcheck-path: /status/ready
+spec:
+  ingressClassName: alb
+  rules:
+    - host: ${APP_HOST}
+      http: { paths: [{ path: /, pathType: Prefix, backend: { service: { name: kong, port: { number: 8000 } } } }] }
+    - host: ${API_HOST}
+      http: { paths: [{ path: /, pathType: Prefix, backend: { service: { name: kong, port: { number: 8000 } } } }] }
+    - host: ${AUTH_HOST}
+      http: { paths: [{ path: /, pathType: Prefix, backend: { service: { name: kong, port: { number: 8000 } } } }] }

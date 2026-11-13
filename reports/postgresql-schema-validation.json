@@ -1,0 +1,86 @@
+{
+  "generatedAt": "2026-11-13T16:08:52.485Z",
+  "engine": "PostgreSQL 18.6 (PGlite 0.5.15) on wasm32-unknown-emscripten, compiled by emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.13 (e13ee988ce3d87a738dd8f3661d02223308c412a), 32-bit",
+  "source": "vortexbird-backend/scripts/schema.sql",
+  "schemaSha256": "261b27a54bfc90ea02910fc2eee164bb9f8b629529d17c10037df28f257886e0",
+  "tables": 26,
+  "indexes": 58,
+  "passed": 17,
+  "failed": 0,
+  "results": [
+    {
+      "name": "EF PostgreSQL generated schema executes",
+      "status": "passed"
+    },
+    {
+      "name": "Versioned migration script is idempotent",
+      "status": "passed"
+    },
+    {
+      "name": "Six reporting views are queryable",
+      "status": "passed"
+    },
+    {
+      "name": "Stock permits valid reservation",
+      "status": "passed"
+    },
+    {
+      "name": "Stock rejects oversell via CHECK constraint",
+      "status": "passed"
+    },
+    {
+      "name": "Stock rejects negative inventory",
+      "status": "passed"
+    },
+    {
+      "name": "Stock rejects negative reservation",
+      "status": "passed"
+    },
+    {
+      "name": "Stock rejects channel belonging to another partner",
+      "status": "passed"
+    },
+    {
+      "name": "Price rejects channel belonging to another partner",
+      "status": "passed"
+    },
+    {
+      "name": "Order rejects channel belonging to another partner",
+      "status": "passed"
+    },
+    {
+      "name": "Default price duplicate NULL customer is rejected",
+      "status": "passed"
+    },
+    {
+      "name": "Same partner and idempotency key is unique",
+      "status": "passed"
+    },
+    {
+      "name": "Different partners may reuse idempotency key",
+      "status": "passed"
+    },
+    {
+      "name": "Consumer rejects duplicate message",
+      "status": "passed"
+    },
+    {
+      "name": "Another consumer may process the same event",
+      "status": "passed"
+    },
+    {
+      "name": "Transaction rolls back stock change on failure",
+      "status": "passed"
+    },
+    {
+      "name": "Webhook event/subscription deduplicates delivery",
+      "status": "passed"
+    }
+  ],
+  "limitations": [
+    "Embedded PostgreSQL18.6 WASM, not target PostgreSQL17 server",
+    "Single process; concurrent sessions/locks/failover not validated",
+    "No external PostgreSQL deployment or full API E2E",
+    "Schema validation does not prove 99.9% availability or p95 SLO"
+  ]
+}

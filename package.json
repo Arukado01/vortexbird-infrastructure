@@ -1,0 +1,12 @@
+{
+  "name": "vortexbird-infrastructure-checks",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Supplemental embedded PostgreSQL schema checks; not a substitute for PG17 integration tests",
+  "scripts": {
+    "test:sql": "node scripts/Check-Postgres-Schema.cjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.15"
+  }
+}

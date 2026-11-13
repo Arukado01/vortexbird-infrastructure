@@ -1,0 +1,84 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny, namespace: vortexbird }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: dns, namespace: vortexbird }
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }, podSelector: { matchLabels: { k8s-app: kube-dns } } }]
+      ports: [{ protocol: UDP, port: 53 }, { protocol: TCP, port: 53 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: gateway-edge, namespace: vortexbird }
+spec:
+  podSelector: { matchLabels: { app: kong } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from: [{ ipBlock: { cidr: 10.73.0.0/16 } }]
+      ports: [{ protocol: TCP, port: 8000 }, { protocol: TCP, port: 8100 }]
+  egress:
+    - to: [{ podSelector: { matchExpressions: [{ key: app, operator: In, values: [backend, frontend, keycloak] }] } }]
+      ports: [{ protocol: TCP, port: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: application-ingress, namespace: vortexbird }
+spec:
+  podSelector: { matchExpressions: [{ key: app, operator: In, values: [backend, frontend, keycloak] }] }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app: kong } } }]
+      ports: [{ protocol: TCP, port: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: frontend-api-proxy, namespace: vortexbird }
+spec:
+  podSelector: { matchLabels: { app: backend } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app: frontend } } }]
+      ports: [{ protocol: TCP, port: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: frontend-egress, namespace: vortexbird }
+spec:
+  podSelector: { matchLabels: { app: frontend } }
+  policyTypes: [Egress]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: backend } } }]
+      ports: [{ protocol: TCP, port: 8080 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: application-egress, namespace: vortexbird }
+spec:
+  podSelector: { matchExpressions: [{ key: app, operator: In, values: [backend, keycloak] }] }
+  policyTypes: [Egress]
+  egress:
+    - to: [{ ipBlock: { cidr: 10.73.20.0/23 } }]
+      ports: [{ protocol: TCP, port: 5432 }, { protocol: TCP, port: 6379 }]
+    - to: [{ ipBlock: { cidr: 0.0.0.0/0 } }]
+      ports: [{ protocol: TCP, port: 443 }]
+    - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } } }]
+      ports: [{ protocol: TCP, port: 4317 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: keycloak-cluster, namespace: vortexbird }
+spec:
+  podSelector: { matchLabels: { app: keycloak } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from: [{ podSelector: { matchLabels: { app: keycloak } } }]
+      ports: [{ protocol: TCP, port: 7800 }, { protocol: TCP, port: 57800 }]
+  egress:
+    - to: [{ podSelector: { matchLabels: { app: keycloak } } }]
+      ports: [{ protocol: TCP, port: 7800 }, { protocol: TCP, port: 57800 }]

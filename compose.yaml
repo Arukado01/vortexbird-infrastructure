@@ -1,0 +1,113 @@
+name: vortexbird
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: vortexbird
+      POSTGRES_USER: vortexbird
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run Initialize-Local.ps1}
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vortexbird -d vortexbird"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  redis:
+    image: redis:7.4.5-alpine
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  keycloak-db:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run Initialize-Local.ps1}
+    volumes: ["keycloak-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run Initialize-Local.ps1}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-local-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Run Initialize-Local.ps1}
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    ports: ["127.0.0.1:8080:8080"]
+    volumes: ["./keycloak/vortexbird-realm.json:/opt/keycloak/data/import/vortexbird-realm.json:ro"]
+    depends_on:
+      keycloak-db: { condition: service_healthy }
+    restart: unless-stopped
+  backend:
+    build: ../vortexbird-backend
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: "8080"
+      ConnectionStrings__Database: Host=postgres;Port=5432;Database=vortexbird;Username=vortexbird;Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Redis: redis:6379
+      Authentication__Authority: http://keycloak:8080/realms/vortexbird
+      Authentication__ValidIssuer: http://localhost:8080/realms/vortexbird
+      Authentication__Audience: vortexbird-api
+      Authentication__RequireHttpsMetadata: "false"
+      Authentication__DemoEnabled: ${DEMO_ENABLED:-true}
+      Authentication__DemoSigningKey: ${DEMO_SIGNING_KEY:?Run Initialize-Local.ps1}
+      Demo__Email: ${DEMO_EMAIL:-admin@andesretail.local}
+      Demo__Password: ${DEMO_PASSWORD:?Run Initialize-Local.ps1}
+      Seed__Enabled: "true"
+      Database__Initialize: "true"
+      Cors__AllowedOrigins__0: http://localhost:${FRONTEND_PORT:-5173}
+      AWS_REGION: us-east-2
+      Payments__Provider: Simulator
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+    ports: ["127.0.0.1:${API_PORT:-5080}:8080"]
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+  frontend:
+    build:
+      context: ../vortexbird-frontend
+      args:
+        VITE_API_BASE_URL: /api/v1
+        VITE_KEYCLOAK_URL: http://localhost:8080
+        VITE_KEYCLOAK_REALM: vortexbird
+        VITE_KEYCLOAK_CLIENT_ID: vortexbird-portal
+        VITE_DEMO_AUTH: ${VITE_DEMO_AUTH:-true}
+    environment:
+      VITE_API_BASE_URL: /api/v1
+      VITE_KEYCLOAK_URL: http://localhost:8080
+      VITE_KEYCLOAK_REALM: vortexbird
+      VITE_KEYCLOAK_CLIENT_ID: vortexbird-portal
+      VITE_DEMO_AUTH: ${VITE_DEMO_AUTH:-true}
+    ports: ["127.0.0.1:${FRONTEND_PORT:-5173}:8080"]
+    depends_on: [backend]
+    restart: unless-stopped
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.136.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes: ["./observability/otel-local.yaml:/etc/otelcol/config.yaml:ro"]
+    ports: ["127.0.0.1:8889:8889"]
+    restart: unless-stopped
+volumes:
+  postgres-data:
+  redis-data:
+  keycloak-data:

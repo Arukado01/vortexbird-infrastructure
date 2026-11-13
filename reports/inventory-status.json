@@ -1,0 +1,14 @@
+{
+  "date": "2026-11-13",
+  "requestedRegion": "us-east-2",
+  "existingResourcesConfirmed": false,
+  "identityConfirmed": false,
+  "inventoryStatus": "blocked",
+  "reason": "AWS CLI could not connect to the configured us-east-2 sign-in token endpoint",
+  "terraformValidate": "not_run_terraform_unavailable_and_download_dns_blocked",
+  "composeConfig": "passed",
+  "keycloakConfigurationChecks": "passed",
+  "dockerExecution": "blocked_daemon_access_denied",
+  "resourcesCreated": false,
+  "terraformApplyRun": false
+}

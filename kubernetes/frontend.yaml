@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: frontend, namespace: vortexbird }
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: frontend } }
+  template:
+    metadata: { labels: { app: frontend } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, runAsUser: 101, fsGroup: 101, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: frontend
+          image: ${FRONTEND_IMAGE}
+          ports: [{ name: http, containerPort: 8080 }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
+          env:
+            - { name: VITE_API_BASE_URL, value: "https://${API_HOST}/api/v1" }
+            - { name: VITE_KEYCLOAK_URL, value: "https://${AUTH_HOST}" }
+            - { name: VITE_DEMO_AUTH, value: "false" }
+          resources: { requests: { cpu: 100m, memory: 64Mi }, limits: { cpu: 500m, memory: 256Mi } }
+          readinessProbe: { httpGet: { path: /, port: http } }
+          livenessProbe: { httpGet: { path: /, port: http }, periodSeconds: 15 }
+          volumeMounts: [{ name: cache, mountPath: /var/cache/nginx }, { name: run, mountPath: /var/run }, { name: tmp, mountPath: /tmp }]
+      volumes: [{ name: cache, emptyDir: {} }, { name: run, emptyDir: {} }, { name: tmp, emptyDir: {} }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: frontend, namespace: vortexbird }
+spec: { selector: { app: frontend }, ports: [{ port: 80, targetPort: http }] }

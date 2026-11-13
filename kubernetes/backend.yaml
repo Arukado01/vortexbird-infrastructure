@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: backend, namespace: vortexbird }
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector: { matchLabels: { app: backend } }
+  strategy: { rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  template:
+    metadata: { labels: { app: backend } }
+    spec:
+      serviceAccountName: backend
+      securityContext: { runAsNonRoot: true, runAsUser: 1654, fsGroup: 1654, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: backend
+          image: ${BACKEND_IMAGE}
+          ports: [{ name: http, containerPort: 8080 }]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: [ALL] } }
+          envFrom: [{ secretRef: { name: backend-secrets } }]
+          env:
+            - { name: ASPNETCORE_ENVIRONMENT, value: Production }
+            - { name: ASPNETCORE_HTTP_PORTS, value: "8080" }
+            - { name: Authentication__DemoEnabled, value: "false" }
+            - { name: Authentication__Authority, value: "https://${AUTH_HOST}/realms/vortexbird" }
+            - { name: Authentication__Audience, value: vortexbird-api }
+            - { name: Authentication__RequireHttpsMetadata, value: "true" }
+            - { name: Cors__AllowedOrigins__0, value: "https://${APP_HOST}" }
+            - { name: AWS_REGION, value: us-east-2 }
+            - { name: AWS_EC2_METADATA_DISABLED, value: "true" }
+            - { name: Messaging__QueueUrl, value: "${QUEUE_URL}" }
+            - { name: Payments__Provider, value: Simulator }
+            - { name: Seed__Enabled, value: "false" }
+            - { name: Database__Initialize, value: "false" }
+            - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: "http://otel-collector.observability:4317" }
+          resources: { requests: { cpu: 250m, memory: 256Mi }, limits: { cpu: "2", memory: 1Gi } }
+          startupProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 5, failureThreshold: 30 }
+          readinessProbe: { httpGet: { path: /health/ready, port: http }, periodSeconds: 10, timeoutSeconds: 3 }
+          livenessProbe: { httpGet: { path: /health/live, port: http }, periodSeconds: 15, timeoutSeconds: 3 }
+          volumeMounts:
+            - { name: secrets-store, mountPath: /mnt/secrets-store, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: secrets-store
+          csi: { driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: { secretProviderClass: backend-aws-secrets } }
+        - { name: tmp, emptyDir: {} }
+      topologySpreadConstraints:
+        - { maxSkew: 1, topologyKey: topology.kubernetes.io/zone, whenUnsatisfiable: ScheduleAnyway, labelSelector: { matchLabels: { app: backend } } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: backend, namespace: vortexbird }
+spec: { selector: { app: backend }, ports: [{ port: 8080, targetPort: http }] }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: { name: backend, namespace: vortexbird }
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: backend }
+  minReplicas: 2
+  maxReplicas: 12
+  behavior: { scaleDown: { stabilizationWindowSeconds: 300 } }
+  metrics: [{ type: Resource, resource: { name: cpu, target: { type: Utilization, averageUtilization: 65 } } }]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: { name: backend, namespace: vortexbird }
+spec: { minAvailable: 1, selector: { matchLabels: { app: backend } } }
