@@ -8,6 +8,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - name: Install pinned configuration validators
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate YAML wiring and deployment approval rules
+        run: |
+          npm run test:config
+          npm run test:gates
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_version: 1.13.3 }
       - name: Format HCL
@@ -28,3 +36,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with: { name: security-report, path: results.sarif }
+      - name: Static configuration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: infrastructure-validation, path: reports/infrastructure-validation.json }

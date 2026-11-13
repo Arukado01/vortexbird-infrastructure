@@ -12,6 +12,6 @@ crash.log
 reports/*.json
 !reports/inventory-status.json
 !reports/postgresql-schema-validation.json
-!reports/postgresql-schema-validation.json
+!reports/infrastructure-validation.json
 rendered/
 node_modules/

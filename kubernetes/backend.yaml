@@ -28,6 +28,10 @@ spec:
             - { name: AWS_REGION, value: us-east-2 }
             - { name: AWS_EC2_METADATA_DISABLED, value: "true" }
             - { name: Messaging__QueueUrl, value: "${QUEUE_URL}" }
+            - { name: Messaging__Provider, value: sqs }
+            - { name: Messaging__Region, value: us-east-2 }
+            - { name: Messaging__VisibilityTimeoutSeconds, value: "120" }
+            - { name: Messaging__MaxAttempts, value: "5" }
             - { name: Payments__Provider, value: Simulator }
             - { name: Seed__Enabled, value: "false" }
             - { name: Database__Initialize, value: "false" }

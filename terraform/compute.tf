@@ -87,10 +87,11 @@ thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
 resource "aws_iam_role" "backend" {
 name = "${local.name}-backend"
 assume_role_policy = jsonencode({ Version = "2012-10-17", Statement = [{
-Effect = "Allow", Principal = { Federated = aws_iam_openid_connect_provider.eks.arn }, Action = "sts:AssumeRoleWithWebIdentity",
+Effect = "Allow", Principal = { Service = "pods.eks.amazonaws.com" }, Action = ["sts:AssumeRole", "sts:TagSession"],
 Condition = { StringEquals = {
-"${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:sub" = "system:serviceaccount:vortexbird:backend",
-"${replace(aws_iam_openid_connect_provider.eks.url, "https://", "")}:aud" = "sts.amazonaws.com"
+"aws:RequestTag/eks-cluster-arn" = aws_eks_cluster.main.arn,
+"aws:RequestTag/kubernetes-namespace" = "vortexbird",
+"aws:RequestTag/kubernetes-service-account" = "backend"
 } }
 }] })
 }

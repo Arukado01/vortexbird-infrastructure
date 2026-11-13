@@ -1,0 +1,154 @@
+{
+  "generatedAt": "2026-11-13T19:53:07.628Z",
+  "kind": "static-configuration",
+  "yamlFiles": 13,
+  "yamlDocuments": 35,
+  "passed": 34,
+  "failed": 0,
+  "results": [
+    {
+      "name": "YAML parse: compose.payments-sandbox.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: compose.sqs.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: compose.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: kubernetes/backend.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: kubernetes/frontend.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: kubernetes/gateway.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: kubernetes/keycloak.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: kubernetes/namespace.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: kubernetes/network-policies.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: kubernetes/secrets.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: observability/otel-local.yaml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: .github/workflows/plan-apply.yml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: .github/workflows/validate.yml",
+      "status": "passed"
+    },
+    {
+      "name": "Pod boundaries and health checks: backend",
+      "status": "passed"
+    },
+    {
+      "name": "Pod boundaries and health checks: frontend",
+      "status": "passed"
+    },
+    {
+      "name": "Pod boundaries and health checks: kong",
+      "status": "passed"
+    },
+    {
+      "name": "Pod boundaries and health checks: keycloak",
+      "status": "passed"
+    },
+    {
+      "name": "Service target port resolves: backend",
+      "status": "passed"
+    },
+    {
+      "name": "Service target port resolves: frontend",
+      "status": "passed"
+    },
+    {
+      "name": "Service target port resolves: kong",
+      "status": "passed"
+    },
+    {
+      "name": "Service target port resolves: keycloak",
+      "status": "passed"
+    },
+    {
+      "name": "Production backend disables demo and schema bootstrap",
+      "status": "passed"
+    },
+    {
+      "name": "Kubernetes render inputs cover all manifest placeholders",
+      "status": "passed"
+    },
+    {
+      "name": "Default-deny network policy includes ingress and egress",
+      "status": "passed"
+    },
+    {
+      "name": "Local published ports are bound to loopback",
+      "status": "passed"
+    },
+    {
+      "name": "Local bootstrap and production CORS use backend configuration keys",
+      "status": "passed"
+    },
+    {
+      "name": "SQS emulator is opt-in and matches the backend transport configuration",
+      "status": "passed"
+    },
+    {
+      "name": "Emulator config declares matching queue, DLQ and 1.x visibility/redrive options",
+      "status": "passed"
+    },
+    {
+      "name": "Production SQS uses Pod Identity and has no local endpoint or static credentials",
+      "status": "passed"
+    },
+    {
+      "name": "Pod Identity link-local endpoint is allowed only for backend egress",
+      "status": "passed"
+    },
+    {
+      "name": "Pod Identity source declares agent, association and scoped role trust",
+      "status": "passed"
+    },
+    {
+      "name": "Payments stay simulated by default and sandbox requires explicit local credentials",
+      "status": "passed"
+    },
+    {
+      "name": "OIDC portal uses PKCE, audience and server-controlled identity claims",
+      "status": "passed"
+    },
+    {
+      "name": "Apply is manual, main-only, uses exact plan and protected environment",
+      "status": "passed"
+    }
+  ],
+  "limitations": [
+    "No Terraform grammar/provider/schema validation: executable unavailable",
+    "ElasticMQ HOCON checked for expected fields only; no emulator parser/runtime validation",
+    "No Docker image build or containers started",
+    "No Kubernetes API or controller validation",
+    "No AWS authentication, inventory, plan, apply or deployment performed",
+    "No external sandbox payment account or webhook validation performed"
+  ]
+}

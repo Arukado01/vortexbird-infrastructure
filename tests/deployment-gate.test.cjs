@@ -1,0 +1,10 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { assertDeploymentEnvironment } = require('../scripts/assert-deployment-environment.cjs');
+const protectedEnvironment = () => ({ name:'demo', protection_rules:[{type:'required_reviewers',reviewers:[{type:'User',reviewer:{id:1}}]}],deployment_branch_policy:{protected_branches:true,custom_branch_policies:false} });
+test('accepts an explicitly reviewed environment with restricted branches',()=>assert.equal(assertDeploymentEnvironment(protectedEnvironment(),'demo'),true));
+test('fails closed for a missing or inaccessible environment',()=>assert.throws(()=>assertDeploymentEnvironment(null,'demo')));
+test('fails closed for an environment silently created without reviewers',()=>assert.throws(()=>assertDeploymentEnvironment({name:'demo',protection_rules:[]},'demo')));
+test('fails closed for an empty reviewer list',()=>{const env=protectedEnvironment();env.protection_rules[0].reviewers=[];assert.throws(()=>assertDeploymentEnvironment(env,'demo'));});
+test('fails closed for an unrestricted deployment branch',()=>{const env=protectedEnvironment();env.deployment_branch_policy=null;assert.throws(()=>assertDeploymentEnvironment(env,'demo'));});
+test('cannot approve a different environment using another environment policy',()=>assert.throws(()=>assertDeploymentEnvironment(protectedEnvironment(),'production')));

@@ -10,5 +10,26 @@
   "keycloakConfigurationChecks": "passed",
   "dockerExecution": "blocked_daemon_access_denied",
   "resourcesCreated": false,
-  "terraformApplyRun": false
+  "terraformApplyRun": false,
+  "lastCheckedAt": "2026-11-13T19:34:00.401Z",
+  "recheck": {
+    "docker": "permission denied at npipe dockerDesktopLinuxEngine",
+    "aws": "could not connect to configured us-east-2 signin token endpoint",
+    "dns": "Access denied resolving releases.hashicorp.com from agent sandbox",
+    "terraform": "not installed; no suitable permitted binary download tool available"
+  },
+  "infrastructureStaticChecks": {
+    "passed": 34,
+    "failed": 0,
+    "yamlDocuments": 35,
+    "yamlFiles": 13
+  },
+  "deploymentApprovalTests": {
+    "passed": 6,
+    "failed": 0
+  },
+  "hostMachineHealth": "not determined by sandbox restrictions",
+  "sqsComposeConfig": "passed; emulator not started",
+  "backendWorkloadIdentity": "EKS Pod Identity source configured with agent, association, scoped trust, CSI and private EKS Auth endpoint; not deployed or Terraform-validated",
+  "paymentsSandboxConfig": "missing required variables correctly rejected; disabled by default; external sandbox not exercised"
 }

@@ -72,6 +72,16 @@ spec:
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
+metadata: { name: backend-pod-identity, namespace: vortexbird }
+spec:
+  podSelector: { matchLabels: { app: backend } }
+  policyTypes: [Egress]
+  egress:
+    - to: [{ ipBlock: { cidr: 169.254.170.23/32 } }]
+      ports: [{ protocol: TCP, port: 80 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
 metadata: { name: keycloak-cluster, namespace: vortexbird }
 spec:
   podSelector: { matchLabels: { app: keycloak } }

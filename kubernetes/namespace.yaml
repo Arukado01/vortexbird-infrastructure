@@ -10,8 +10,8 @@ kind: ServiceAccount
 metadata:
   name: backend
   namespace: vortexbird
-  annotations:
-    eks.amazonaws.com/role-arn: ${BACKEND_ROLE_ARN}
+# IAM role binding is the Terraform EKS Pod Identity association.
+# Do not add an IRSA annotation: the backend uses container credentials.
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

@@ -4,9 +4,12 @@
   "private": true,
   "description": "Supplemental embedded PostgreSQL schema checks; not a substitute for PG17 integration tests",
   "scripts": {
-    "test:sql": "node scripts/Check-Postgres-Schema.cjs"
+    "test:sql": "node scripts/Check-Postgres-Schema.cjs",
+    "test:config": "node scripts/Check-Infrastructure.cjs",
+    "test:gates": "node --test tests/deployment-gate.test.cjs"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.15"
+    "@electric-sql/pglite": "0.5.15",
+    "yaml": "2.9.1"
   }
 }

@@ -1,0 +1,12 @@
+# Explicit opt-in to a TEST Mercado Pago account. Base compose uses Simulator.
+# Supply the MP_* variables to the process or a separately ignored env file.
+services:
+  backend:
+    environment:
+      Payments__Provider: MercadoPagoSandbox
+      Payments__Sandbox__Enabled: ${MP_SANDBOX_ENABLED:-false}
+      Payments__Sandbox__AccessToken: ${MP_TEST_ACCESS_TOKEN:?Set the test-only access token locally}
+      Payments__Sandbox__ExpectedTestSellerId: ${MP_TEST_SELLER_ID:?Set the verified test seller ID}
+      Payments__Sandbox__WebhookSecret: ${MP_WEBHOOK_SECRET:?Set the sandbox webhook signing secret locally}
+      Payments__Sandbox__NotificationUrl: ${MP_NOTIFICATION_URL:?Set an actual reachable HTTPS webhook URL}
+      Payments__Sandbox__ReturnUrl: ${MP_RETURN_URL:?Set the actual portal return URL}

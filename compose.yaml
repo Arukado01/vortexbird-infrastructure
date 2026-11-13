@@ -86,12 +86,6 @@ services:
   frontend:
     build:
       context: ../vortexbird-frontend
-      args:
-        VITE_API_BASE_URL: /api/v1
-        VITE_KEYCLOAK_URL: http://localhost:8080
-        VITE_KEYCLOAK_REALM: vortexbird
-        VITE_KEYCLOAK_CLIENT_ID: vortexbird-portal
-        VITE_DEMO_AUTH: ${VITE_DEMO_AUTH:-true}
     environment:
       VITE_API_BASE_URL: /api/v1
       VITE_KEYCLOAK_URL: http://localhost:8080

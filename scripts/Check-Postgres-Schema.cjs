@@ -22,7 +22,7 @@ async function insert(table, overrides = {}) {
     if (c.is_nullable === 'YES') data[c.column_name] = null;
     else if (c.data_type === 'uuid') data[c.column_name] = crypto.randomUUID();
     else if (c.data_type === 'boolean') data[c.column_name] = true;
-    else if (['integer','bigint','double precision','numeric'].includes(c.data_type)) data[c.column_name] = 1;
+    else if (['integer','bigint','double precision','numeric'].includes(c.data_type)) data[c.column_name] = c.column_name === 'RequestsPerMinute' ? 120 : 1;
     else if (c.data_type.includes('timestamp')) data[c.column_name] = new Date().toISOString();
     else data[c.column_name] = 'validation';
   }

@@ -1,0 +1,23 @@
+# Opt-in emulator only. Merge with compose.yaml; never use this overlay in AWS.
+# docker compose -f compose.yaml -f compose.sqs.yaml up --build -d
+services:
+  elasticmq:
+    image: softwaremill/elasticmq-native:1.6.12
+    ports: ["127.0.0.1:9324:9324"]
+    volumes:
+      - ./messaging/elasticmq.conf:/opt/elasticmq.conf:ro
+    restart: unless-stopped
+  backend:
+    environment:
+      Messaging__Provider: sqs
+      Messaging__ServiceUrl: http://elasticmq:9324
+      Messaging__QueueUrl: http://elasticmq:9324/000000000000/vortexbird-events
+      Messaging__Region: us-east-2
+      Messaging__VisibilityTimeoutSeconds: "120"
+      Messaging__MaxAttempts: "5"
+      # Deliberate non-secret emulator credentials; never an AWS access key.
+      AWS_ACCESS_KEY_ID: local-emulator-only
+      AWS_SECRET_ACCESS_KEY: local-emulator-only
+      AWS_EC2_METADATA_DISABLED: "true"
+    depends_on:
+      elasticmq: { condition: service_started }
