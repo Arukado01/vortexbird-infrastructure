@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 $infraRoot = Split-Path $PSScriptRoot -Parent
 $envFile = Join-Path $infraRoot '.env'
 $composeFile = Join-Path $infraRoot 'compose.yaml'
-$dockerCommand = Get-Command docker -CommandType Application -ErrorAction SilentlyContinue
+$dockerCommand = Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $dockerCommand) { throw 'Docker no esta disponible. Instala/inicia Docker Desktop y vuelve a ejecutar este archivo desde tu sesion.' }
 
 Push-Location $infraRoot
@@ -19,9 +19,14 @@ try {
     try {
         $daemonResult = & $dockerCommand.Source info --format '{{.ServerVersion}}' 2>&1
         $daemonExitCode = $LASTEXITCODE
-    } catch { $daemonExitCode = 1 }
+    } catch {
+        $daemonResult = $_.Exception.Message
+        $daemonExitCode = 1
+    }
     if ($daemonExitCode -ne 0) {
-        throw 'No se puede acceder al servidor Docker desde esta sesion. Comprueba que Docker Desktop este iniciado y ejecuta el launcher desde tu terminal habitual. No se cambiaron permisos ni protecciones.'
+        $daemonDetail = ($daemonResult | Out-String).Trim()
+        if ([string]::IsNullOrWhiteSpace($daemonDetail)) { $daemonDetail = 'Docker no devolvio detalles del fallo.' }
+        throw "Docker encontrado en '$($dockerCommand.Source)', pero fallo la comprobacion del motor (codigo $daemonExitCode). Error original: $daemonDetail"
     }
     $daemonResult = $null
     & $dockerCommand.Source compose version --short

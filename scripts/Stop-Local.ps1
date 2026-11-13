@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 $infraRoot = Split-Path $PSScriptRoot -Parent
 $envFile = Join-Path $infraRoot '.env'
 $composeFile = Join-Path $infraRoot 'compose.yaml'
-$dockerCommand = Get-Command docker -CommandType Application -ErrorAction SilentlyContinue
+$dockerCommand = Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $dockerCommand) { throw 'Docker no esta disponible en esta sesion.' }
 if (-not (Test-Path -LiteralPath $envFile)) { throw 'Falta la configuracion local .env. No se regenero ni se elimino ningun dato.' }
 Push-Location $infraRoot
