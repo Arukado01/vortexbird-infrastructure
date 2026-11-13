@@ -40,7 +40,7 @@ npm ci
 npm run test:sql -- ../vortexbird-backend/scripts/schema.sql reports/postgresql-schema-validation.json
 ```
 
-El reporte `reports/postgresql-schema-validation.json` conserva los 17 controles del esquema y su hash SHA256 completo; los informes de las suites adicionales están en `../qa/`. El esquema final tiene prefijo SHA256 `2ec02f14`. Después de modificar el modelo EF, crear la migración correspondiente y regenerar `scripts/schema.sql` desde el repositorio backend con `dotnet ef migrations script --idempotent` y los parámetros de proyecto documentados allí. Esto **no** ejecuta Npgsql contra un servidor PostgreSQL 17, múltiples conexiones, concurrencia/locks, API E2E, failover ni pruebas de carga. No demuestra objetivos de latencia o disponibilidad.
+El reporte `reports/postgresql-schema-validation.json` conserva los 17 controles del esquema y su hash SHA256 completo; los informes de las suites adicionales están en `../qa/`. El esquema final tiene prefijo SHA256 `f91b0ed9`. Después de modificar el modelo EF, crear la migración correspondiente y regenerar `scripts/schema.sql` desde el repositorio backend con `dotnet ef migrations script --idempotent` y los parámetros de proyecto documentados allí. Esto **no** ejecuta Npgsql contra un servidor PostgreSQL 17, múltiples conexiones, concurrencia/locks, API E2E, failover ni pruebas de carga. No demuestra objetivos de latencia o disponibilidad.
 
 ## Ejecución local
 
