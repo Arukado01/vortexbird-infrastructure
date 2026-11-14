@@ -65,6 +65,7 @@ try {
     if ($apiBinding.Count -ne 1 -or $portalBinding.Count -ne 1) { throw 'No se pudo determinar un unico puerto local para API y portal.' }
     $apiUrl = 'http://localhost:' + $apiBinding[0].published
     $portalUrl = 'http://localhost:' + $portalBinding[0].published
+    $keycloakUrl = [string]$resolved.services.frontend.environment.VITE_KEYCLOAK_URL
     $demoEnabled = [string]$resolved.services.backend.environment.Authentication__DemoEnabled -eq 'true'
     $portalDemoEnabled = [string]$resolved.services.frontend.environment.VITE_DEMO_AUTH -eq 'true'
     $demoEmail = [string]$resolved.services.backend.environment.Demo__Email
@@ -142,7 +143,7 @@ try {
     Write-Host "Portal: $portalUrl"
     Write-Host "API:    $apiUrl"
     Write-Host "Salud:  $apiUrl/health/ready"
-    Write-Host 'Keycloak (no comprobado por este launcher): http://localhost:8080'
+    Write-Host "Keycloak (no comprobado por este launcher): $keycloakUrl"
     if ($demoEnabled) {
         Write-Host 'Acceso de demo: LOGIN PASS' -ForegroundColor Green
         Write-Host "DEMO_EMAIL=$demoEmail"

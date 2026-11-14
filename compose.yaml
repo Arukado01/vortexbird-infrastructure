@@ -6,7 +6,7 @@ services:
       POSTGRES_DB: vortexbird
       POSTGRES_USER: vortexbird
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run Initialize-Local.ps1}
-    ports: ["127.0.0.1:5432:5432"]
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
     volumes: ["postgres-data:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U vortexbird -d vortexbird"]
@@ -17,7 +17,7 @@ services:
   redis:
     image: redis:7.4.5-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-    ports: ["127.0.0.1:6379:6379"]
+    ports: ["127.0.0.1:${REDIS_PORT:-6379}:6379"]
     volumes: ["redis-data:/data"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -48,11 +48,11 @@ services:
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?Run Initialize-Local.ps1}
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-local-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Run Initialize-Local.ps1}
-      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_PORT:-8080}
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
-    ports: ["127.0.0.1:8080:8080"]
+    ports: ["127.0.0.1:${KEYCLOAK_PORT:-8080}:8080"]
     volumes: ["./keycloak/vortexbird-realm.json:/opt/keycloak/data/import/vortexbird-realm.json:ro"]
     depends_on:
       keycloak-db: { condition: service_healthy }
@@ -65,7 +65,7 @@ services:
       ConnectionStrings__Database: Host=postgres;Port=5432;Database=vortexbird;Username=vortexbird;Password=${POSTGRES_PASSWORD}
       ConnectionStrings__Redis: redis:6379
       Authentication__Authority: http://keycloak:8080/realms/vortexbird
-      Authentication__ValidIssuer: http://localhost:8080/realms/vortexbird
+      Authentication__ValidIssuer: http://localhost:${KEYCLOAK_PORT:-8080}/realms/vortexbird
       Authentication__Audience: vortexbird-api
       Authentication__RequireHttpsMetadata: "false"
       Authentication__DemoEnabled: ${DEMO_ENABLED:-true}
@@ -88,7 +88,7 @@ services:
       context: ../vortexbird-frontend
     environment:
       VITE_API_BASE_URL: /api/v1
-      VITE_KEYCLOAK_URL: http://localhost:8080
+      VITE_KEYCLOAK_URL: http://localhost:${KEYCLOAK_PORT:-8080}
       VITE_KEYCLOAK_REALM: vortexbird
       VITE_KEYCLOAK_CLIENT_ID: vortexbird-portal
       VITE_DEMO_AUTH: ${VITE_DEMO_AUTH:-true}
@@ -99,7 +99,7 @@ services:
     image: otel/opentelemetry-collector-contrib:0.136.0
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes: ["./observability/otel-local.yaml:/etc/otelcol/config.yaml:ro"]
-    ports: ["127.0.0.1:8889:8889"]
+    ports: ["127.0.0.1:${OTEL_METRICS_PORT:-8889}:8889"]
     restart: unless-stopped
 volumes:
   postgres-data:

@@ -55,6 +55,8 @@ docker compose ps
 
 `Initialize-Local.ps1` genera contraseñas aleatorias únicamente en `.env`, ignorado por Git, y no reemplaza configuración existente. La pantalla de demostración usa el correo y contraseña definidos en `DEMO_EMAIL` / `DEMO_PASSWORD`. No se incluyen contraseñas fijas compartidas en el repositorio. Portal: `http://localhost:5173`; API: `http://localhost:5080`; Keycloak: `http://localhost:8080`. Puertos locales ligados a loopback.
 
+Si otro proyecto ocupa un puerto, ajusta `API_PORT`, `FRONTEND_PORT`, `POSTGRES_PORT`, `REDIS_PORT`, `KEYCLOAK_PORT` u `OTEL_METRICS_PORT` en `.env` y ejecuta el lanzador de nuevo. El emisor OIDC y la dirección de identidad del portal se derivan de `KEYCLOAK_PORT`. Si cambias `FRONTEND_PORT` y usas OIDC, registra la nueva dirección del portal en URIs de redirección y orígenes web del cliente Keycloak.
+
 Para la ruta OIDC, deshabilitar `DEMO_ENABLED` y `VITE_DEMO_AUTH`, configurar SMTP en Keycloak (necesario para verificar correo y recuperar contraseña), crear el usuario y vincular su subject y sus permisos mediante la administración de la plataforma. El realm no otorga privilegios administrativos a usuarios autorregistrados. El JWT tiene issuer externo `localhost:8080`; el backend usa metadata por el hostname interno `keycloak` y valida el issuer externo explícito.
 
 `docker compose down` conserva volúmenes. No ejecutar `down -v` salvo decisión explícita de eliminar datos locales. Los servicios se inician en modo desarrollo; nunca copiar `start-dev`, demo auth o contraseñas locales a producción.
