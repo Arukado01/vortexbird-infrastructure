@@ -1,0 +1,7 @@
+**
+!Dockerfile
+!realm-template.json
+!rds-ca-bundle.pem
+!entrypoint.sh
+!validate-runtime.sh
+!healthcheck.sh

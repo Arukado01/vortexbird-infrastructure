@@ -1,0 +1,30 @@
+{
+  "recordedAt": "2026-11-17T15:09:58.4580491-05:00",
+  "status": "prepared_not_built",
+  "staticResult": "static-validation.json",
+  "staticChecksPassed": 21,
+  "realmOnlyChecksPassed": 12,
+  "note": "The 12 realm-only checks overlap with the 21 consolidated source checks and must not be added together.",
+  "shellSyntax": {
+    "command": "bash -n entrypoint.sh; bash -n validate-runtime.sh; bash -n healthcheck.sh",
+    "status": "blocked",
+    "exitCode": 1,
+    "reason": "Git Bash/MSYS NtCreateDirectoryObject denied, 0xC0000022; shell did not parse the scripts."
+  },
+  "imageDownloadExecuted": false,
+  "dockerBuildExecuted": false,
+  "ecrPushExecuted": false,
+  "cloudMutationExecuted": false,
+  "requiredExternalInputs": [
+    "Reviewed official Keycloak 26.8.2 image digest",
+    "Reviewed current public RDS CA bundle and SHA-256"
+  ],
+  "sources": [
+    "https://www.keycloak.org/downloads",
+    "https://www.keycloak.org/server/containers",
+    "https://www.keycloak.org/server/importExport",
+    "https://www.keycloak.org/observability/health",
+    "https://www.keycloak.org/server/caching",
+    "https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html"
+  ]
+}

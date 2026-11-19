@@ -1,0 +1,23 @@
+# Reviewed identity image publication
+
+`.github/workflows/publish-identity.yml` is a manual pipeline for the existing infrastructure repository. It builds the production Keycloak context from `keycloak/cloud`, scans the local image, and publishes only to the already-created ECR repository `vortexbird-ecs-<environment>-identity`. It does not create resources, write secret values, run Terraform or update ECS. No workflow execution, container build, scan or publication has been performed as part of preparing this pipeline.
+
+Before dispatch, establish the protected GitHub environment `ecs-<environment>-identity-publish`, required reviewers and restricted deployment branches. Only the `main` ref is accepted. Configure these environment variables:
+
+| Variable | Required value |
+| --- | --- |
+| `AWS_ACCOUNT_ID` | Reviewed 12-digit deployment account |
+| `AWS_REGION` | Reviewed ECR region; default `us-east-2` |
+| `ECS_IDENTITY_PUBLISH_ROLE_ARN` | Exactly `arn:aws:iam::<account>:role/vortexbird-ecs-<environment>-identity-publish` |
+
+The dedicated role must already exist. Its OIDC trust must use the existing provider in this account, audience `sts.amazonaws.com`, and exact subject `repo:<owner>/<infrastructure-repository>:environment:ecs-<environment>-identity-publish`. Limit the role to `ecr:GetAuthorizationToken` on `*`, and `ecr:DescribeRepositories`, `ecr:DescribeImages`, `ecr:BatchCheckLayerAvailability`, `ecr:InitiateLayerUpload`, `ecr:UploadLayerPart`, `ecr:CompleteLayerUpload`, `ecr:PutImage` on the exact repository ARN. Do not attach IAM administration, ECS deployment, Secrets Manager access or repository creation permissions. This role is separate from the Terraform and application release roles; no role or trust policy was created here.
+
+Dispatch requires the environment, the reviewed official base image `quay.io/keycloak/keycloak:26.8.2@sha256:<digest>`, and an independently reviewed SHA-256 for the public [RDS global CA bundle](https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem). The workflow downloads only that fixed HTTPS URL. `Build-Image.ps1` verifies its hash, PEM CA constraints and certificate dates before copying it into an allowlisted temporary build context. There are no default or invented digests. Changing the approved Keycloak version requires a reviewed source change to the build guard and its tests.
+
+The pipeline runs production realm JSON/security checks, Bash syntax checks and image build before authenticating to AWS. A pinned [Trivy action v0.36.0](https://github.com/aquasecurity/trivy-action/releases/tag/v0.36.0), commit `ed142fd0673e97e23eac54620cfb913e5ce36c25`, runs Trivy `v0.70.0` with vulnerability and secret scanners. HIGH/CRITICAL findings, including vulnerabilities without fixes, block publication; scanner/download failures also stop the job. The pin was checked against the official immutable release and [upstream security advisory](https://github.com/aquasecurity/trivy/security/advisories/GHSA-69fq-xp46-6x23). Security artifacts contain only counts and vulnerability identifiers/severities, with secret matches and source lines omitted.
+
+After the scan, the workflow verifies STS account and the exact ECR ARN, URI, name and `IMMUTABLE` mode. It never creates a missing repository. The image receives a unique source-commit/run/attempt tag. After push, the ECR digest must match the local image's pushed `RepoDigests` entry. The successful `identity-publication.json` artifact records the resulting `repository@sha256:...`, base digest, CA hash, source commit, run and `deployed: false`; job outputs expose `digest` and `image_uri` for later review.
+
+Apply the published digest to `identity_image_digest` only in a subsequent reviewed saved plan. The application release workflow does not update Keycloak. The saved-plan apply workflow runs `preflight-identity-tls.cjs --plan-json` immediately before apply: known activation flags, account/region, exact certificate ARNs, current ACM ISSUED status and domain coverage must pass. Foundation-only plans can request certificates without activating services. No DNS resolution, TLS handshake, database initialization, realm import or human OIDC login is established by either pipeline's static checks.
+
+Validation performed locally: `npm run test:identity-publish` exercises contract rejection, repository boundaries, digest matching and workflow guards without network or AWS calls. `node --test tests/identity-tls-preflight.test.cjs` exercises the saved-plan TLS gate with mocked certificate metadata. Docker and remote Actions execution remain unverified in this environment.

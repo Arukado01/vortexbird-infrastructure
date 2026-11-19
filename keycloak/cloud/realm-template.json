@@ -1,0 +1,301 @@
+{
+  "realm": "vortexbird",
+  "enabled": true,
+  "displayName": "VortexBird Integration Platform",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": true,
+  "resetPasswordAllowed": true,
+  "rememberMe": false,
+  "verifyEmail": true,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 28800,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and notUsername(undefined)",
+  "eventsEnabled": true,
+  "eventsExpiration": 2592000,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": false,
+  "roles": {
+    "realm": [
+      {
+        "name": "SUPER_ADMIN"
+      },
+      {
+        "name": "ADMIN"
+      },
+      {
+        "name": "ARCHITECT"
+      },
+      {
+        "name": "INTEGRATION_MANAGER"
+      },
+      {
+        "name": "OPERATIONS"
+      },
+      {
+        "name": "SECURITY_AUDITOR"
+      },
+      {
+        "name": "PARTNER_ADMIN"
+      },
+      {
+        "name": "PARTNER_USER"
+      },
+      {
+        "name": "VIEWER"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "vortexbird-portal",
+      "name": "VortexBird portal",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "${VORTEXBIRD_PORTAL_ORIGIN}",
+        "${VORTEXBIRD_PORTAL_ORIGIN}/"
+      ],
+      "webOrigins": [
+        "${VORTEXBIRD_PORTAL_ORIGIN}"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${VORTEXBIRD_PORTAL_ORIGIN}"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email"
+      ],
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "vortexbird-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "partner",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "partner_id",
+            "claim.name": "partner_id",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "identity-type",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-hardcoded-claim-mapper",
+          "config": {
+            "claim.name": "identity_type",
+            "claim.value": "human",
+            "jsonType.label": "String",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "channels",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "channel_id",
+            "claim.name": "channel_id",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        }
+      ],
+      "optionalClientScopes": [
+        "inventory.read",
+        "pricing.read",
+        "orders.read",
+        "orders.create",
+        "webhooks.read",
+        "webhooks.manage"
+      ],
+      "protocol": "openid-connect",
+      "fullScopeAllowed": false,
+      "consentRequired": false
+    },
+    {
+      "clientId": "vortexbird-api",
+      "enabled": true,
+      "bearerOnly": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "inventory.read",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "pricing.read",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "orders.read",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "orders.create",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "webhooks.read",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "webhooks.manage",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "profile",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "given-name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "firstName",
+            "claim.name": "given_name",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "family-name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "lastName",
+            "claim.name": "family_name",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "email",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "email",
+            "claim.name": "email",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "email-verified",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "config": {
+            "user.attribute": "emailVerified",
+            "claim.name": "email_verified",
+            "jsonType.label": "boolean",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"Usuario\",\"validations\":{\"length\":{\"min\":3,\"max\":255}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"email\",\"displayName\":\"Correo electrónico\",\"required\":{\"roles\":[\"user\"]},\"validations\":{\"email\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"firstName\",\"displayName\":\"Nombre\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"lastName\",\"displayName\":\"Apellido\",\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"partner_id\",\"displayName\":\"Partner (administrado por identidad)\",\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]}},{\"name\":\"channel_id\",\"displayName\":\"Canales (administrados por identidad)\",\"multivalued\":true,\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]}}],\"unmanagedAttributePolicy\":\"DISABLED\"}"
+          ]
+        }
+      }
+    ]
+  },
+  "sslRequired": "all",
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false
+}

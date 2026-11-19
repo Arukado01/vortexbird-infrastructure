@@ -1,0 +1,153 @@
+{
+  "recordedAt": "2026-11-17T23:03:04.9944720-05:00",
+  "scope": "Cloud Keycloak image source preparation",
+  "status": "static_checks_passed_runtime_not_executed",
+  "checks": [
+    {
+      "name": "Production realm, HTTPS required, self-registration closed",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Realm contains no users, credentials, client secrets or SMTP secrets",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Public authorization-code client, no password/implicit/service grants",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "S256 is mandatory",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Redirects are exactly the portal origin and root path",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Web origin is exact and logout redirects to the exact origin",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Only the reviewed public origin environment placeholder is imported",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Access tokens have API audience and human identity claim",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Partner and channel claims are admin managed; unmanaged attributes disabled",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Refresh rotation, email verification and brute-force protection enabled",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Optimized build includes PostgreSQL and health/metrics at build time",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Reviewed official image digest is mandatory; no mutable default",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "No secret build arguments/defaults and final UID is non-root",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Production command includes import; development commands cannot start",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Management health is on 9000 and JDBC discovery is enabled",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Runtime accepts a dedicated HTTPS origin or the exact portal /auth URL with trusted proxies and DB TLS",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "Public CA bundle is checked by reviewed hash and certificate constraints before build",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "PowerShell build and validation scripts parse without errors",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "entrypoint.sh has LF endings and a Bash shebang",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "validate-runtime.sh has LF endings and a Bash shebang",
+      "status": "passed",
+      "type": "static"
+    },
+    {
+      "name": "healthcheck.sh has LF endings and a Bash shebang",
+      "status": "passed",
+      "type": "static"
+    }
+  ],
+  "passed": 21,
+  "failed": 0,
+  "dockerBuildExecuted": false,
+  "imagePublished": false,
+  "realmImported": false,
+  "cloudResourcesChanged": false,
+  "files": [
+    {
+      "name": "Dockerfile",
+      "sha256": "749384459409b2bb1016a1a2195a06804ea773dc882bbca3399d16f8d7691ef2"
+    },
+    {
+      "name": "realm-template.json",
+      "sha256": "c336897de2486e15b612cf8e1bf50ef3a998b55fe8213c30732c3c3b5e5cd31b"
+    },
+    {
+      "name": "entrypoint.sh",
+      "sha256": "a60352e30d477a278bdee73e327d3a2d0f2006016b2903b1986f760ffc789819"
+    },
+    {
+      "name": "validate-runtime.sh",
+      "sha256": "d478f70f2453c3ab258f95f8e553c3c020fbfdc32c6ae24f7bc90f48816e1865"
+    },
+    {
+      "name": "healthcheck.sh",
+      "sha256": "7eb953ff33acab3aac0495fdb1b00191a9718f71fff96e2b1b9373f21b705bc8"
+    },
+    {
+      "name": "Build-Image.ps1",
+      "sha256": "52506617eee24f1ce67886833bbda2a6cbc94815adcf4af5894726964e6b3890"
+    },
+    {
+      "name": "Validate-Cloud.ps1",
+      "sha256": "774111ba4f577788198f9423ec95d9d478e93b08bbfd66b99e9d5664e1f97af1"
+    }
+  ],
+  "limitations": [
+    "Static contracts do not prove a successful container build, Keycloak import, TLS connection, JDBC_PING cluster or running service.",
+    "A real reviewed official-image digest and public RDS CA bundle/hash are required before build.",
+    "No image download, Docker build, ECR push or AWS mutation was executed by this validator."
+  ]
+}

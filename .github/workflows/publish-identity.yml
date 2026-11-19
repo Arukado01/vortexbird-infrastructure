@@ -1,0 +1,164 @@
+name: Publish reviewed Keycloak identity image
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [development, staging, production]
+        required: true
+      keycloak_image:
+        description: Reviewed quay.io/keycloak/keycloak:26.8.2@sha256 digest
+        type: string
+        required: true
+      rds_ca_sha256:
+        description: Independently reviewed SHA256 of the official public RDS global CA bundle
+        type: string
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: vortexbird-ecs-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ecs-${{ inputs.environment }}-identity-publish
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      digest: ${{ steps.publication.outputs.digest }}
+      image_uri: ${{ steps.publication.outputs.image_uri }}
+    env:
+      TARGET: ${{ inputs.environment }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      IDENTITY_PUBLISH_ROLE_ARN: ${{ vars.ECS_IDENTITY_PUBLISH_ROLE_ARN }}
+      KEYCLOAK_IMAGE: ${{ inputs.keycloak_image }}
+      RDS_CA_SHA256: ${{ inputs.rds_ca_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Fail closed unless identity publication review is enforced
+        uses: actions/github-script@v7
+        env:
+          TARGET_ENVIRONMENT: ecs-${{ inputs.environment }}-identity-publish
+        with:
+          script: |
+            const { assertDeploymentEnvironment } = require('./scripts/assert-deployment-environment.cjs');
+            const response = await github.rest.repos.getEnvironment({
+              ...context.repo, environment_name: process.env.TARGET_ENVIRONMENT
+            });
+            assertDeploymentEnvironment(response.data, process.env.TARGET_ENVIRONMENT);
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Validate input scope and publication guards
+        id: contract
+        run: |
+          npm run test:identity-publish
+          node scripts/identity-publish-contract.cjs --prepare
+      - name: Check production realm and scripts before the image build
+        shell: pwsh
+        run: ./keycloak/cloud/Validate-Cloud.ps1
+      - name: Check Linux entrypoint syntax
+        run: |
+          bash -n keycloak/cloud/entrypoint.sh
+          bash -n keycloak/cloud/validate-runtime.sh
+          bash -n keycloak/cloud/healthcheck.sh
+      - name: Retrieve the public RDS CA bundle for checksum verification
+        run: |
+          curl --fail --silent --show-error --proto '=https' --tlsv1.2 \
+            https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
+            --output "$RUNNER_TEMP/rds-ca-bundle.pem"
+      - name: Build immutable-base image with the reviewed public CA
+        shell: pwsh
+        env:
+          LOCAL_IMAGE: ${{ steps.contract.outputs.local_image }}
+        run: |
+          ./keycloak/cloud/Build-Image.ps1 -KeycloakImage $env:KEYCLOAK_IMAGE `
+            -RdsCaBundlePath (Join-Path $env:RUNNER_TEMP 'rds-ca-bundle.pem') `
+            -RdsCaBundleSha256 $env:RDS_CA_SHA256 -ImageTag $env:LOCAL_IMAGE
+      - name: Block vulnerable images and embedded secrets before AWS authentication
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0 immutable release
+        with:
+          version: v0.70.0
+          image-ref: ${{ steps.contract.outputs.local_image }}
+          scan-type: image
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: '1'
+          format: json
+          output: ${{ runner.temp }}/identity-image-security-raw.json
+          cache: false
+      - name: Summarize security results without secret matches or source lines
+        if: always()
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const source = process.env.RUNNER_TEMP + '/identity-image-security-raw.json';
+          if (fs.existsSync(source)) {
+            const report = JSON.parse(fs.readFileSync(source, 'utf8'));
+            const results = report.Results || [];
+            const vulnerabilities = results.flatMap(r => r.Vulnerabilities || []);
+            const secrets = results.flatMap(r => r.Secrets || []);
+            fs.writeFileSync('identity-image-security.json', JSON.stringify({
+              scanner: 'Trivy v0.70.0', severity: ['HIGH','CRITICAL'],
+              vulnerabilityCount: vulnerabilities.length, secretCount: secrets.length,
+              vulnerabilities: vulnerabilities.map(v => ({id:v.VulnerabilityID,severity:v.Severity})),
+              passed: vulnerabilities.length === 0 && secrets.length === 0
+            }, null, 2));
+            fs.rmSync(source);
+          }
+          NODE
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.IDENTITY_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+          role-session-name: identity-publish-${{ github.run_id }}
+      - name: Verify the account and the existing immutable identity repository
+        env:
+          REPOSITORY: ${{ steps.contract.outputs.repository }}
+        run: |
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$AWS_ACCOUNT_ID"
+          aws ecr describe-repositories --repository-names "$REPOSITORY" --output json > "$RUNNER_TEMP/identity-repository.json"
+          node scripts/identity-publish-contract.cjs --verify-repository "$RUNNER_TEMP/identity-repository.json"
+      - uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registries: ${{ env.AWS_ACCOUNT_ID }}
+          mask-password: true
+      - name: Push only the scanned image to the verified existing repository
+        env:
+          LOCAL_IMAGE: ${{ steps.contract.outputs.local_image }}
+          REMOTE_IMAGE: ${{ steps.contract.outputs.remote_image }}
+        run: |
+          docker tag "$LOCAL_IMAGE" "$REMOTE_IMAGE"
+          docker push "$REMOTE_IMAGE"
+      - name: Record and compare the published digest
+        id: publication
+        env:
+          REPOSITORY: ${{ steps.contract.outputs.repository }}
+          IMAGE_TAG: ${{ steps.contract.outputs.image_tag }}
+          REMOTE_IMAGE: ${{ steps.contract.outputs.remote_image }}
+        run: |
+          aws ecr describe-images --repository-name "$REPOSITORY" --image-ids "imageTag=$IMAGE_TAG" --output json > "$RUNNER_TEMP/identity-image.json"
+          docker image inspect "$REMOTE_IMAGE" --format '{{json .RepoDigests}}' > "$RUNNER_TEMP/identity-local-digests.json"
+          node scripts/identity-publish-contract.cjs --record-digest "$RUNNER_TEMP/identity-image.json" "$RUNNER_TEMP/identity-local-digests.json"
+          printf 'Published identity image: `%s`\nNo ECS deployment was performed.\n' "$(node -p 'require("./identity-publication.json").imageUri')" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain publication and validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-publication-${{ inputs.environment }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            identity-publication.json
+            keycloak/cloud/static-validation.json
+            identity-image-security.json
+          if-no-files-found: ignore
+          retention-days: 30
