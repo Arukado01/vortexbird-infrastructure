@@ -6,7 +6,10 @@
   "scripts": {
     "test:sql": "node scripts/Check-Postgres-Schema.cjs",
     "test:config": "node scripts/Check-Infrastructure.cjs",
-    "test:gates": "node --test tests/deployment-gate.test.cjs"
+    "test:gates": "node --test tests/deployment-gate.test.cjs",
+    "test:release": "node --test tests/ecs-release.test.cjs",
+    "test:prerequisites": "node --test tests/ecs-prerequisites.test.cjs",
+    "test:identity-publish": "node --test tests/identity-publish.test.cjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.15",

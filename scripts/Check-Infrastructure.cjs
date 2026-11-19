@@ -169,7 +169,25 @@ check('Apply is manual, main-only, uses exact plan and protected environment',()
   assert.equal(upload.with['include-hidden-files'],true);
   assert.ok(upload.with.path.includes('terraform/.terraform.lock.hcl'));
 });
-const report={generatedAt:new Date().toISOString(),kind:'static-configuration',yamlFiles:parsed.size,yamlDocuments:[...parsed.values()].reduce((n,docs)=>n+docs.length,0),passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,results,limitations:['No Terraform grammar/provider/schema validation: executable unavailable','ElasticMQ HOCON checked for expected fields only; no emulator parser/runtime validation','No Docker image build or containers started','No Kubernetes API or controller validation','No AWS authentication, inventory, plan, apply or deployment performed','No external sandbox payment account or webhook validation performed']};
+check('ECS apply preserves reviewed account, state, commit and exact plan',()=>{
+  const workflow=parsed.get('.github/workflows/ecs-plan.yml')[0];
+  assert.equal(workflow.on.workflow_dispatch.inputs.apply.default,false);
+  const apply=workflow.jobs.apply;
+  assert.match(apply.if,/inputs\.apply/);assert.match(apply.if,/refs\/heads\/main/);
+  assert.equal(apply.needs,'plan');
+  assert.equal(apply.environment,'ecs-${{ inputs.environment }}-apply');
+  const gate=apply.steps.findIndex(s=>s.name?.includes('Fail closed'));
+  const credentials=apply.steps.findIndex(s=>s.uses?.startsWith('aws-actions/configure-aws-credentials'));
+  assert.ok(gate>=0&&gate<credentials);
+  assert.ok(apply.steps.some(s=>s.run?.includes('sha256sum --check ecs-plan.sha256')&&s.run.includes('cmp ecs-plan.state ecs-apply.state')));
+  assert.ok(apply.steps.some(s=>s.run?.includes('cat ecs-plan.account')&&s.run.includes('-lockfile=readonly')));
+  assert.ok(apply.steps.some(s=>s.run==='terraform -chdir=terraform-ecs apply -input=false approved.tfplan'));
+  assert.ok(!apply.steps.some(s=>s.run?.includes('-auto-approve')));
+  const upload=workflow.jobs.plan.steps.find(s=>s.uses?.startsWith('actions/upload-artifact'));
+  assert.equal(upload.with['include-hidden-files'],true);
+  assert.ok(upload.with.path.includes('terraform-ecs/.terraform.lock.hcl'));
+});
+const report={generatedAt:new Date().toISOString(),kind:'static-configuration',yamlFiles:parsed.size,yamlDocuments:[...parsed.values()].reduce((n,docs)=>n+docs.length,0),passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,results,limitations:['This command does not run Terraform grammar/provider/schema validation; see separate Terraform execution evidence','ElasticMQ HOCON checked for expected fields only; no emulator parser/runtime validation','No Docker image build or containers started by this command','No Kubernetes API or controller validation','No AWS authentication, inventory, plan, apply or deployment performed by this command','No external sandbox payment account or webhook validation performed']};
 fs.writeFileSync(path.join(root,'reports/infrastructure-validation.json'),JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify({passed:report.passed,failed:report.failed,yamlFiles:report.yamlFiles,yamlDocuments:report.yamlDocuments,failures:results.filter(r=>r.status==='failed')},null,2));
 if(report.failed)process.exitCode=1;

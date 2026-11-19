@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-11-14T14:50:17.953Z",
+  "generatedAt": "2026-11-18T04:04:15.933Z",
   "kind": "static-configuration",
-  "yamlFiles": 13,
-  "yamlDocuments": 35,
-  "passed": 34,
+  "yamlFiles": 16,
+  "yamlDocuments": 38,
+  "passed": 38,
   "failed": 0,
   "results": [
     {
@@ -51,7 +51,19 @@
       "status": "passed"
     },
     {
+      "name": "YAML parse: .github/workflows/ecs-plan.yml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: .github/workflows/ecs-release.yml",
+      "status": "passed"
+    },
+    {
       "name": "YAML parse: .github/workflows/plan-apply.yml",
+      "status": "passed"
+    },
+    {
+      "name": "YAML parse: .github/workflows/publish-identity.yml",
       "status": "passed"
     },
     {
@@ -141,14 +153,18 @@
     {
       "name": "Apply is manual, main-only, uses exact plan and protected environment",
       "status": "passed"
+    },
+    {
+      "name": "ECS apply preserves reviewed account, state, commit and exact plan",
+      "status": "passed"
     }
   ],
   "limitations": [
-    "No Terraform grammar/provider/schema validation: executable unavailable",
+    "This command does not run Terraform grammar/provider/schema validation; see separate Terraform execution evidence",
     "ElasticMQ HOCON checked for expected fields only; no emulator parser/runtime validation",
-    "No Docker image build or containers started",
+    "No Docker image build or containers started by this command",
     "No Kubernetes API or controller validation",
-    "No AWS authentication, inventory, plan, apply or deployment performed",
+    "No AWS authentication, inventory, plan, apply or deployment performed by this command",
     "No external sandbox payment account or webhook validation performed"
   ]
 }

@@ -1,75 +1,58 @@
-# Inventario y estimación para aprobación
+# Costos ECS Fargate — actualización operativa del 17 de noviembre de 2026
 
-Fecha: 13 de noviembre de 2026. Región prevista: `us-east-2` (Ohio). **No hay recursos creados y no hay gasto autorizado.**
+**Cuenta terminada en 1107, región Ohio (`us-east-2`). El titular autorizó subir VortexBird a AWS.** El importe y el conjunto de recursos del despliegue ECS siguen pendientes de revisión con un plan de la cuenta. El 17 de noviembre por la noche se verificó la sesión de consola. CloudShell mostró la verificación de cuenta pendiente al intentar crear su entorno. El intento de planificación desde la terminal del agente se detuvo en STS y en la carga del proveedor. El siguiente preplan de Windows puede ejecutarse con `-ReviewAwsPlan`.
 
-## Inventario existente
+Se consultaron tarifas regionales de AWS Price List Query API (`GetProducts`) con filtro `location=US East (Ohio)`, modalidad on-demand. El endpoint de Pricing utilizado está en `us-east-1`; **los productos cotizados son de Ohio**. Evidencia: `../qa/aws-ohio-pricing-2026-11-17.json`. Cálculo reproducible: `python ../qa/estimate-aws-costs.py` desde infraestructura, o `python qa/estimate-aws-costs.py` desde la raíz del proyecto.
 
-Se observaron perfiles AWS configurados. `aws sts get-caller-identity` con el perfil predeterminado falló al conectar al endpoint `us-east-2.signin.aws.amazon.com/v1/token`. No se verificaron cuenta, identidad, regiones habilitadas, recursos, cuotas ni costos actuales. No es correcto interpretar este bloqueo como que la cuenta está vacía. El script de inventario incluido permite repetir la lectura sin modificar recursos.
+## Escenarios comparables
 
-## Recursos nuevos propuestos
+Ambos incluyen identidad Keycloak y dos bases PostgreSQL privadas separadas. El piloto tiene una tarea por servicio: frontend 0.25 vCPU/0.5 GB, API 0.5/1, worker 0.5/1 e identidad 0.5/2; total 1.75 vCPU/4.5 GB. La alternativa de mayor disponibilidad duplica las cuatro tareas y usa dos NAT y dos RDS Multi-AZ `db.t4g.medium`. Requiere declarar las clases de ambas bases explícitamente; no equivale a un plan ya ejecutado.
 
-| Recurso | Demo AWS | Producción |
-|---|---:|---:|
-| VPC, Internet Gateway | 1 | 1 |
-| Subredes public/app/data | 2 por nivel | 2 por nivel |
-| NAT + IPv4 pública | 1 | 2 |
-| EKS control plane | 1 | 1 |
-| EKS Pod Identity | Agente + asociación backend | Agente + asociación backend |
-| EKS Auth interface endpoint | 1 endpoint en 2 AZ | 1 endpoint en 2 AZ |
-| Nodos on-demand | 2 t3.large | 3 m7i.large iniciales |
-| RDS PostgreSQL | Single-AZ t4g.micro, 30 GB | Multi-AZ t4g.medium, 30 GB iniciales |
-| ElastiCache Redis | 1 t4g.micro | 2 t4g.small, failover |
-| SQS eventos/DLQ | 1 + 1 | 1 + 1 |
-| ECR | 2 repositorios | 2 repositorios |
-| Secrets Manager | 2 app/identity + maestro RDS | Igual, rotación requerida |
-| S3 reportes | 1 privado con versionado | Igual |
-| WAF regional | 1 + reglas | 1 + reglas |
-| ALB | 1 creado por controller después | 1 creado por controller después |
-| CloudWatch | Logs, métricas y 7 alarmas | Mayor retención |
+Se suponen 730 horas/mes, Linux x86_64, 50 GB gp3 entre las dos bases, cargas bajas y réplicas mínimas. Keycloak comparte ALB/NAT sin otra IP pública. Redis TLS sigue condicionado a un grupo ACL válido; se muestra su costo cuando se habilite.
 
-No incluye VPN/Direct Connect al ERP on-prem, dominio, soporte AWS, IVA, tráfico relevante entre AZ o transferencia a internet. El entorno local con Compose no genera cargos AWS.
+| Partida | Piloto USD/mes | Mayor disponibilidad USD/mes |
+| --- | ---: | ---: |
+| Fargate: frontend, API, worker y Keycloak | 66.32 | 132.63 |
+| RDS PostgreSQL: aplicación e identidad separadas | 23.36 | 188.34 |
+| RDS gp3: 30 GB aplicación + 20 GB identidad | 5.75 | 11.50 |
+| ALB: 1 LCU piloto / 2 LCU mayor disponibilidad | 22.27 | 28.11 |
+| NAT: 1 piloto / 2 mayor disponibilidad | 32.85 | 65.70 |
+| IPv4 públicas: mínimo 3 / 4 | 10.95 | 14.60 |
+| Secrets Manager: siete secretos | 2.80 | 2.80 |
+| **Base con identidad, sin Redis** | **164.29** | **443.68** |
+| **Redis opcional: uno / dos nodos** | **11.68** | **23.36** |
 
-## Cálculo de orden de magnitud
+| Provisión según uso, no tarifa fija | Piloto USD/mes | Mayor disponibilidad USD/mes |
+| --- | ---: | ---: |
+| CloudWatch, Container Insights, ECR, SQS, S3 de estado y solicitudes | 20–35 | 40–70 |
+| Almacenamiento adicional de respaldos | 5–10 | 10–25 |
+| Datos procesados por NAT y transferencias | 10–25 | 20–60 |
+| DNS | 0–1 | 0–1 |
+| Tareas efímeras de migración | 0.10–1 | 0.20–2 |
+| **Total con identidad, sin Redis** | **199.39–236.29** | **513.88–601.68** |
+| **Total con identidad y Redis** | **211.07–247.97** | **537.24–625.04** |
+| Reserva orientativa, no autorizada | 220–290 | 600–750 |
 
-Supuestos: 730 horas/mes, USD, on-demand, carga baja, 30 GB de base inicial, sin descuentos/free tier. No es una cotización vinculante ni un resultado de AWS Pricing Calculator. Solo EKS y NAT tienen tarifas puntuales verificadas en páginas oficiales; las demás líneas son provisiones presupuestales que deben reemplazarse por cotizaciones regionales antes de aprobar.
+Las provisiones de tráfico, respaldo y observabilidad deben ajustarse al plan y al uso esperado. No son límites automáticos de facturación. Las tareas extra durante despliegues, autoscaling, crecimiento de discos y almacenamiento de versiones aumentan los cargos. Apagar tareas no elimina RDS, ALB, NAT ni almacenamiento.
 
-| Partida mensual | Demo USD | Producción USD | Base |
-|---|---:|---:|---|
-| EKS | 73.00 | 73.00 | 730 × $0.10/h, soporte estándar |
-| NAT (solo horas) | 32.85 | 65.70 | 730 × $0.045/h × gateways |
-| EKS Auth PrivateLink | 15-25 | 15-25 | Provisión por endpoint en 2 AZ; confirmar tarifa regional y GB |
-| Nodos y discos | 125–170 | 230–330 | Presupuesto a validar por SKU |
-| RDS y almacenamiento | 20–45 | 110–200 | Presupuesto; producción Multi-AZ |
-| Redis | 15–35 | 55–110 | Presupuesto por nodos |
-| ALB/LCU, WAF, IPv4 | 35–65 | 45–110 | Depende de uso/reglas |
-| Logs/métricas, secretos, ECR, S3/SQS | 20–55 | 60–150 | Depende de retención/volumen |
-| **Subtotal orientativo** | **335.85-500.85** | **653.70-1063.70** | Sin rubros excluidos |
-| **Reserva de presupuesto sugerida** | **400–550** | **800–1400** | Margen operativo, no límite garantizado |
+## Tarifas verificadas
 
-NAT agrega procesamiento de datos (tarifa verificada de referencia Ohio $0.045/GB), más transferencias aplicables. EKS fuera del soporte estándar puede costar más. Autoscaling aumenta el costo; las réplicas máximas no son gratuitas.
+Fargate: 0.04048 USD/vCPU-h y 0.004445 USD/GB-h. RDS PostgreSQL: `db.t4g.micro` Single-AZ 0.016 USD/h; `db.t4g.medium` Multi-AZ 0.129 USD/h; gp3 0.115 USD/GB-mes Single-AZ y 0.23 Multi-AZ. Redis `cache.t4g.micro`: 0.016 USD/h, sin soporte extendido. ALB: 0.0225 USD/h y 0.008 USD/LCU-h. NAT: 0.045 USD/h y 0.045 USD/GB. IPv4: 0.005 USD/h. Secretos: 0.40 USD/secreto-mes y 0.000005 USD/solicitud.
 
-PrivateLink factura cada AZ-hora y los GB procesados. El endpoint EKS Auth se incorporó para las credenciales temporales Pod Identity de los nodos privados. La línea es una reserva, no una tarifa Ohio verificada ni un recurso creado; debe incluirse en el plan y presupuesto sometidos a aprobación.
+Se excluyeron de la selección los SKU de Fargate Windows/ARM, reservas de capacidad RDS sin uso, ELB de red/gateway/Outposts y soporte extendido Redis. Esto evita comparar productos distintos con el despliegue propuesto.
 
-## Alternativas
+## Cuenta existente y alcance
 
-1. **Demostración local (recomendada inicialmente):** Compose, costo AWS cero; suficiente para mostrar flujos, arquitectura y fallas. No demuestra HA real de AWS.
-2. **AWS EKS demo:** mayor fidelidad a infraestructura objetivo, costo permanente del control plane y NAT; apagar nodos no elimina todos los costos. No ofrece el diseño HA de producción.
-3. **ECS Fargate + servicios administrados:** evita control plane EKS y reduce carga operativa; requiere adaptar manifests/pipeline y comparar costo por vCPU/memoria. No está implementado en esta entrega.
+La consola mostró 103.27 USD acumulados en el mes y 187.45 USD de previsión de cierre **para la cuenta completa**, con proyectos existentes PGE/AUXO. No son costos de VortexBird ni cargos creados en esta intervención. Hay presupuestos existentes de 20 y 150 USD; ninguno autoriza el nuevo proyecto. La cuota Fargate on-demand es 12 vCPU, pero su consumo actual no se midió; no debe interpretarse como 12 vCPU libres.
 
-## Aprobación pendiente
+Se verificaron dos clústeres ECS, cinco repositorios ECR, dos RDS privados y tres ALB de otros proyectos. No se modificaron. No se identificaron recursos VortexBird en los listados de Ohio ni nombres de secretos, stacks o roles asociados. El proveedor OIDC de GitHub existe; su confianza para los futuros repositorios VortexBird sigue sin verificar. No se reutilizarán dominio, VPC, roles, bases ni bucket ajenos sin una decisión explícita. La búsqueda GitHub no devolvió repositorios VortexBird accesibles y los repositorios locales no tienen remote.
 
-Antes de crear recursos, confirmar: cuenta/perfil de AWS, plan Terraform concreto sin modificaciones a infraestructura existente, perfil demo/production, presupuesto mensual, tiempo de vida, región habilitada, dominios propios y certificado ACM, redes administrativas, propietario de operación y alertas. Los cambios a DNS, secretos, permisos IAM o add-ons se revisan en ese plan. No se ejecutó `terraform apply`.
+## Exclusiones y decisión pendiente
 
-Fuentes oficiales consultadas:
+No incluye IVA, tipo de cambio COP, compra/renovación de dominio, AWS Support, SMTP, sistemas externos, costos del proveedor de pago o GitHub Actions. Tampoco incluye KMS administrado por el cliente, créditos CPU RDS, soporte extendido, IOPS extra ni crecimiento fuera de los supuestos. Se supone un certificado público ACM no exportable, sin CA privada de pago. No se aplican créditos ni free tier como descuento garantizado.
 
-- https://aws.amazon.com/eks/pricing/
-- https://aws.amazon.com/vpc/pricing/
-- https://aws.amazon.com/privatelink/pricing/
-- https://aws.amazon.com/ec2/pricing/on-demand/
-- https://aws.amazon.com/rds/postgresql/pricing/
-- https://aws.amazon.com/elasticache/pricing/
-- https://aws.amazon.com/elasticloadbalancing/pricing/
-- https://calculator.aws/
-- https://www.keycloak.org/server/containers
-- https://www.keycloak.org/server/hostname
-- https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/eks_cluster
+Para pedir la única aprobación de gasto deben existir: aceptación local conectada, dominio de portal/identidad, repositorios destino y OIDC de alcance mínimo, estado remoto, imágenes inmutables, secretos preparados y un **plan real** con altas/cambios/destrucciones, duración del piloto y costo final revisable. Solo después se solicitará la decisión. No se han creado recursos facturables, publicado secretos ni ampliado permisos.
+
+Fuentes primarias: [AWS Price List Query API](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/price-changes.html), [Fargate](https://aws.amazon.com/fargate/pricing/), [RDS PostgreSQL](https://aws.amazon.com/rds/postgresql/pricing/), [ElastiCache](https://aws.amazon.com/elasticache/pricing/), [ALB](https://aws.amazon.com/elasticloadbalancing/pricing/), [VPC](https://aws.amazon.com/vpc/pricing/), [Secrets Manager](https://aws.amazon.com/secrets-manager/pricing/).
+
+La estimación anterior, incluida la alternativa histórica EKS, se conserva sin alteraciones en `../qa/history/costs-and-approval-before-document10.md`.

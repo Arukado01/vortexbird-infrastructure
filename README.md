@@ -1,10 +1,22 @@
 # VortexBird Infrastructure
 
+El objetivo inicial en AWS es **ECS Fargate**. Empieza por [terraform-ecs/README.md](terraform-ecs/README.md) para los tres perfiles, IAM, datos, pruebas y preparación del piloto. Los archivos `terraform/`, `kubernetes/` y `plan-apply.yml` siguientes corresponden a la alternativa EKS. Compose sigue siendo la opción local.
+
+## Revisión de ejecución del 17 de noviembre de 2026
+
+La última validación de configuración pasó 36 comprobaciones y las 6 pruebas de compuerta CI. `Test-Configuration.ps1` confirmó configuración Keycloak y Compose. Terraform `fmt -check` pasó; `validate` y `test` no pudieron cargar el esquema del proveedor AWS (plugin sin respuesta), por lo que los resultados históricos posteriores no acreditan una ejecución actual exitosa. El flujo ECS conserva y aplica el plan exacto solo tras revisión del environment, comparación de cuenta/estado/commit y entrada manual; aún no fue ejecutado en GitHub/AWS.
+
+La continuación incorpora [release ECS de aplicación](ecs-release.md): tarea migradora aislada, modo bootstrap explícito, revisiones por digest, salud de servicios/targets y smoke con rollback de task definitions anteriores. `npm run test:release` pasa **26/26** casos con respuestas AWS controladas; no ejecuta AWS ni conexiones de red. El modo `verify` comprueba digests y salud sin mutaciones. El release real y el login humano OIDC siguen pendientes de ejecución; los workflows no conceden autorización presupuestaria por sí solos.
+
+El arranque Docker quedó bloqueado por acceso al motor. La alternativa [nativa Windows](native-runtime.md) incorpora PostgreSQL, API/worker, portal, Keycloak y ElasticMQ con parada por identidad de procesos; Redis queda deshabilitado como caché opcional. `Start-Native.ps1 -ValidateOnly` pasó. El arranque integral sigue sin comprobarse por restricciones de sockets y bootstrap PostgreSQL incompleto. El launcher Docker ahora exige discovery Keycloak y PING Redis además de API/portal, y no imprime contraseñas.
+
+[Costos ECS actuales](costs-and-approval.md): 183,59–233,59 USD/mes orientativos con provisión de identidad; reserva sugerida 220–290 USD/mes, sin aprobación ni cotización Ohio completa. No se consultó ni se modificó AWS; la compuerta local continúa pendiente. Consultar `../qa/infra-validation-2026-11-17.json` para comandos y límites de esta revisión.
+
 Infraestructura reproducible para la demostración AndesRetail y una evolución a AWS. **No se ha desplegado nada en AWS.** Los adaptadores empresariales y los pagos de la demostración son simulados. El perfil `demo` de AWS tampoco equivale a producción.
 
-## Estado verificable
+## Evidencia histórica de revisiones anteriores
 
-| Verificación | Resultado en esta sesión |
+| Verificación | Resultado registrado anteriormente; no sustituye la revisión actual |
 |---|---|
 | Realm Keycloak: PKCE S256, sin password grant ni implicit, rotación refresh | PASS |
 | `docker compose config --quiet` | PASS |
@@ -12,14 +24,14 @@ Infraestructura reproducible para la demostración AndesRetail y una evolución 
 | Compuerta de aprobación CI | 6 pruebas pasan: bloquea entornos ausentes, sin revisores o sin restricción de ramas |
 | Ejecución de contenedores | Bloqueada: acceso al daemon Docker denegado |
 | Cuenta AWS y recursos existentes | No verificados: endpoint de autenticación inaccesible |
-| Terraform provider/schema validate | Pendiente: Terraform no instalado; descarga bloqueada por DNS |
+| Terraform ECS | Terraform 1.13.3 y proveedor AWS 6.73.0. Configuración válida y dos escenarios con proveedor simulado. |
 | `terraform plan` / `apply` | No ejecutados |
-| Compose con emulador SQS opcional | Combinación de configuración PASS; imagen y envío/recepción pendientes |
+| ElasticMQ 1.6.12 | Ejecución autónoma por Java. Envío, visibilidad, reentrega, acuse, DLQ y replay verificados. El overlay Compose pasó validación de configuración. |
 | Overlay de pagos sandbox | Deshabilitado por defecto; rechaza variables obligatorias ausentes; cuenta/webhook externo pendientes |
 | Despliegue Kubernetes, TLS, DNS, disponibilidad y p95 | No verificados |
 | Cinco migraciones EF en PostgreSQL 18.6 embebido | 45 pruebas SQL pasan en cuatro suites; 31 tablas, 72 índices y 6 vistas; no equivale a servidor PG17 |
 
-La comprobación más reciente volvió a encontrar `permission denied` sobre el pipe Docker y `Access denied` al resolver el servidor de descargas de Terraform desde el entorno restringido del agente. El endpoint de sesión AWS tampoco respondió. Estos resultados no prueban que Docker, DNS o la sesión AWS del usuario estén averiados fuera de ese entorno. No se modificaron permisos, protecciones ni perfiles para sortearlo.
+El motor Docker rechazó el acceso por su pipe de Windows en este entorno. Terraform, los proveedores y los binarios de prueba se descargaron. PostgreSQL 17.12 y ElasticMQ se ejecutaron como procesos locales. La validación en AWS requiere una cuenta autorizada.
 
 ## Validación estática de infraestructura
 
@@ -63,7 +75,7 @@ Para la ruta OIDC, deshabilitar `DEMO_ENABLED` y `VITE_DEMO_AUTH`, configurar SM
 
 Opciones explícitas: [SQS local con ElasticMQ](messaging/README.md) y [pagos con una cuenta de sandbox](payments/README.md). El Compose principal conserva transporte local y pagos simulados. Ninguna opción fue ejecutada contra un servicio externo en esta sesión.
 
-## Decisiones
+## Decisiones de la alternativa EKS
 
 - PostgreSQL y Keycloak tienen bases separadas. El compose usa instancias separadas para evitar permisos cruzados.
 - Redis es caché; no decide disponibilidad de reserva ni reemplaza la transacción persistente.
@@ -73,7 +85,7 @@ Opciones explícitas: [SQS local con ElasticMQ](messaging/README.md) y [pagos co
 - RDS administrado, ElastiCache TLS/AUTH y EKS sobre subredes privadas. Datos sin ruta por defecto a internet. Todo es recurso nuevo con prefijo `vortexbird-*`; no se importa ni modifica infraestructura ajena.
 - ALB y Route53 se configuran después de conocer dominios y un certificado ACM real. No se inventaron nombres DNS ni ARNs.
 
-## Variables y secretos
+## Variables y secretos de EKS
 
 El `.env.example` documenta solo desarrollo. `terraform/variables.tf` contiene entradas de AWS. Se requieren `kubernetes_version` actualmente soportada, `admin_role_arn` existente, CIDRs administrativos explícitos y `TF_VAR_redis_auth_token`. El estado contiene información sensible: usar S3 existente con cifrado, versionado, bloqueo y acceso limitado. El token Redis permanece marcado sensitive, pero eso no elimina su presencia en el estado.
 
@@ -86,9 +98,9 @@ Terraform crea metadatos Secrets Manager sin valores. La configuración producti
 
 Nunca dar al backend el usuario maestro RDS. La contraseña maestra la administra RDS. Crear usuarios de aplicación/migración por separado y conceder INSERT/SELECT solamente sobre auditoría al usuario de ejecución. Migraciones ejecutadas por job antes del rollout, con credenciales distintas. El almacenamiento y CSI de secretos no sustituyen la rotación de credenciales ni la migración del esquema.
 
-## Identidad AWS del backend
+## Identidad AWS del backend en EKS
 
-El backend usa **EKS Pod Identity** con el proveedor de credenciales de contenedor de `AWSSDK.Core` 4.0.102.19. `terraform/pod-identity.tf` declara el agente, su versión compatible con la versión EKS elegida y la asociación al ServiceAccount `vortexbird/backend`. El rol confía en `pods.eks.amazonaws.com` para `AssumeRole` y `TagSession`, condicionado al ARN del clúster, namespace y ServiceAccount. Los permisos de aplicación permanecen limitados a las colas y al secreto correspondiente. Keycloak y VPC CNI conservan sus roles IRSA propios.
+El backend usa **EKS Pod Identity** con el proveedor de credenciales de contenedor del SDK oficial de AWS. `terraform/pod-identity.tf` declara el agente, su versión compatible con la versión EKS elegida y la asociación al ServiceAccount `vortexbird/backend`. El rol confía en `pods.eks.amazonaws.com` para `AssumeRole` y `TagSession`, condicionado al ARN del clúster, namespace y ServiceAccount. Los permisos de aplicación permanecen limitados a las colas y al secreto correspondiente. Keycloak y VPC CNI conservan sus roles IRSA propios.
 
 La asociación EKS inyecta la ruta del token y la URI del agente; no se escriben claves AWS permanentes ni variables IRSA en el backend. Su NetworkPolicy permite únicamente el endpoint del agente `169.254.170.23:80`. El rol de nodos ya incluye `AmazonEKSWorkerNodePolicy`, que autoriza `eks-auth:AssumeRoleForPodIdentity`. Se añade un endpoint privado EKS Auth en ambas subredes de aplicación con entrada TLS limitada a nodos; su costo figura en la estimación. `backend_role_arn` sigue disponible como output de auditoría, pero ya no es un valor de renderizado Kubernetes.
 
@@ -96,7 +108,7 @@ El SecretProviderClass del backend activa `usePodIdentity: "true"`; requiere una
 
 Referencias oficiales: [SDKs compatibles](https://docs.aws.amazon.com/eks/latest/userguide/pod-id-minimum-sdk.html), [proveedor de credenciales de contenedor](https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html), [agente y permisos del nodo](https://docs.aws.amazon.com/eks/latest/userguide/pod-id-agent-setup.html), [trust policy y condiciones](https://docs.aws.amazon.com/eks/latest/userguide/pod-id-role.html), [EKS Auth PrivateLink](https://docs.aws.amazon.com/eks/latest/userguide/vpc-interface-endpoints.html), [CSI con Pod Identity](https://docs.aws.amazon.com/secretsmanager/latest/userguide/ascp-examples.html).
 
-## Plan y aprobación AWS
+## Plan y aprobación para EKS
 
 1. Ejecutar `scripts/Inventory-Aws.ps1` con perfil y región correctos; comprobar identidad, regiones habilitadas y cuotas. Los reportes de cuenta se ignoran en Git.
 2. Revisar `costs-and-approval.md`. Seleccionar `demo` o `production`; validar disponibilidad de tipos/versiones en `us-east-2`.
@@ -112,7 +124,7 @@ Referencias oficiales: [SDKs compatibles](https://docs.aws.amazon.com/eks/latest
 
 Los archivos `kubernetes/*.yaml` son plantillas con entradas obligatorias, no comandos aplicados. `Render-Kubernetes.ps1` exige un JSON con las claves presentes en los templates y escribe solo en `rendered/`.
 
-## CI/CD y rollback
+## CI/CD y rollback de la alternativa EKS
 
 `validate.yml` ejecuta los validadores YAML y de aprobación, formatea HCL, valida el esquema Terraform y ejecuta Checkov (fallos bloqueantes). `plan-apply.yml` es manual y aplica únicamente desde `main`, con `apply=true` **y** aprobación del environment protegido. Antes de asumir credenciales AWS, consulta la configuración del environment mediante la API GitHub y exige revisores y ramas restringidas; si esa consulta o la protección faltan, bloquea el apply. Crear ambientes `terraform-plan`, `demo`, `production` con esas reglas antes de habilitarlo. GitHub no las configura al crear el workflow y algunos planes no ofrecen revisores para repositorios privados: en ese caso el apply automatizado permanece bloqueado y se utiliza el proceso manual con aprobación del plan concreto.
 

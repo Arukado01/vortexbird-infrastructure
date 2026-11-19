@@ -79,10 +79,11 @@ try {
         throw 'Docker Compose no completo el arranque. Revisa el error anterior y docker compose ps. Los datos/volumenes se conservaron; no se declara la plataforma lista.'
     }
 
-    Write-Host "Esperando API y portal (hasta $HealthTimeoutSeconds segundos)..."
+    Write-Host "Esperando API, portal e identidad (hasta $HealthTimeoutSeconds segundos)..."
     $deadline = [DateTime]::UtcNow.AddSeconds($HealthTimeoutSeconds)
     $apiReady = $false
     $portalReady = $false
+    $identityReady = $false
     do {
         try {
             $apiState = Invoke-RestMethod -Uri "$apiUrl/health/ready" -TimeoutSec 3 -MaximumRedirection 0
@@ -93,12 +94,18 @@ try {
             $portalContent = if ($portalState.Content -is [byte[]]) { [Text.Encoding]::UTF8.GetString($portalState.Content) } else { [string]$portalState.Content }
             $portalReady = $portalState.StatusCode -eq 200 -and $portalContent.Trim() -eq 'ok'
         } catch { $portalReady = $false }
-        if ($apiReady -and $portalReady) { break }
+        try {
+            $discovery = Invoke-RestMethod -Uri "$keycloakUrl/realms/vortexbird/.well-known/openid-configuration" -TimeoutSec 3 -MaximumRedirection 0
+            $identityReady = $discovery.issuer -eq "$keycloakUrl/realms/vortexbird" -and $discovery.code_challenge_methods_supported -contains 'S256'
+        } catch { $identityReady = $false }
+        if ($apiReady -and $portalReady -and $identityReady) { break }
         if ([DateTime]::UtcNow -lt $deadline) { Start-Sleep -Seconds 2 }
     } while ([DateTime]::UtcNow -lt $deadline)
-    if (-not ($apiReady -and $portalReady)) {
-        throw "Timeout de salud: API=$apiReady, portal=$portalReady. Revisa docker compose ps y los logs de backend/frontend desde $infraRoot. No se borraron datos ni se muestran credenciales como si el arranque hubiera funcionado."
+    if (-not ($apiReady -and $portalReady -and $identityReady)) {
+        throw "Timeout de salud: API=$apiReady, portal=$portalReady, Keycloak=$identityReady. Revisa docker compose ps y los logs de backend/frontend/keycloak desde $infraRoot. No se borraron datos ni se muestran credenciales como si el arranque hubiera funcionado."
     }
+    $redisState = & $dockerCommand.Source @composeArguments exec -T redis redis-cli ping 2>$null
+    if ($LASTEXITCODE -ne 0 -or ($redisState | Out-String).Trim() -ne 'PONG') { throw 'Redis no responde a PING. No se declara la plataforma lista; se conservaron los datos.' }
 
     # Check the seeded account too; never display the returned JWT or response.
     if ($demoEnabled) {
@@ -139,16 +146,14 @@ try {
     }
 
     Write-Host ''
-    Write-Host 'API y portal: HEALTH PASS' -ForegroundColor Green
+    Write-Host 'API, portal, Keycloak y Redis: HEALTH PASS' -ForegroundColor Green
     Write-Host "Portal: $portalUrl"
     Write-Host "API:    $apiUrl"
     Write-Host "Salud:  $apiUrl/health/ready"
-    Write-Host "Keycloak (no comprobado por este launcher): $keycloakUrl"
+    Write-Host "Keycloak: $keycloakUrl"
     if ($demoEnabled) {
         Write-Host 'Acceso de demo: LOGIN PASS' -ForegroundColor Green
-        Write-Host "DEMO_EMAIL=$demoEmail"
-        Write-Host "DEMO_PASSWORD=$demoPassword"
-        Write-Host 'Estas credenciales son locales. No compartas la salida ni el archivo .env.'
+        Write-Host 'Consulta DEMO_EMAIL y DEMO_PASSWORD en vortexbird-infrastructure/.env. No compartas ese archivo.'
     } else {
         Write-Host 'Se conserva el modo OIDC configurado. No se habilito autenticacion de demo.'
     }

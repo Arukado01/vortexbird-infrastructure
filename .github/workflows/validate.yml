@@ -16,14 +16,22 @@ jobs:
         run: |
           npm run test:config
           npm run test:gates
+          npm run test:release
+          npm run test:prerequisites
+          npm run test:identity-publish
+          node --test tests/identity-tls-preflight.test.cjs
       - uses: hashicorp/setup-terraform@v3
         with: { terraform_version: 1.13.3 }
-      - name: Format HCL
-        run: terraform -chdir=terraform fmt -recursive
-      - name: Initialize provider schemas only
-        run: terraform -chdir=terraform init -backend=false -input=false
-      - name: Validate
-        run: terraform -chdir=terraform validate
+      - name: Validate ECS Fargate and exercise simulated plans
+        run: |
+          terraform -chdir=terraform-ecs fmt -check -recursive
+          terraform -chdir=terraform-ecs init -backend=false -input=false
+          terraform -chdir=terraform-ecs validate
+          terraform -chdir=terraform-ecs test
+      - name: Validate the EKS alternative
+        run: |
+          terraform -chdir=terraform init -backend=false -input=false
+          terraform -chdir=terraform validate
       - name: Scan Terraform and Kubernetes
         uses: bridgecrewio/checkov-action@v12
         with:
