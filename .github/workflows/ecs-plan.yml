@@ -1,0 +1,159 @@
+name: ECS Fargate - reviewed plan and approved apply
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: AWS profile to plan
+        type: choice
+        options: [development, staging, production]
+        required: true
+      apply:
+        description: Apply this saved plan only after budget and protected environment review
+        type: boolean
+        default: false
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: vortexbird-ecs-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: ecs-${{ github.event.inputs.environment }}-plan
+    env:
+      TARGET: ${{ inputs.environment }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+      STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      TF_VAR_region: ${{ vars.AWS_REGION || 'us-east-2' }}
+      TF_VAR_deploy_services: ${{ vars.ECS_DEPLOY_SERVICES || 'false' }}
+      ECS_CERTIFICATE_ARN: ${{ vars.ECS_CERTIFICATE_ARN }}
+      ECS_PORTAL_ORIGIN: ${{ vars.ECS_PORTAL_ORIGIN }}
+      ECS_KEYCLOAK_URL: ${{ vars.ECS_KEYCLOAK_URL }}
+      ECS_IMAGE_DIGESTS_JSON: ${{ vars.ECS_IMAGE_DIGESTS_JSON }}
+      ECS_REDIS_USER_GROUP_ID: ${{ vars.ECS_REDIS_USER_GROUP_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.sha }}' }
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.13.3 }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.ECS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Initialize isolated ECS state
+        run: |
+          test -n "$STATE_BUCKET"
+          terraform -chdir=terraform-ecs init -input=false \
+            -backend-config="bucket=$STATE_BUCKET" -backend-config="key=vortexbird/ecs/$TARGET/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" -backend-config="use_lockfile=true"
+      - name: Generate plan for review
+        env:
+          TF_VAR_identity_enabled: ${{ vars.ECS_IDENTITY_ENABLED }}
+          TF_VAR_identity_deploy_service: ${{ vars.ECS_IDENTITY_DEPLOY_SERVICE }}
+          TF_VAR_identity_hostname: ${{ vars.ECS_IDENTITY_HOSTNAME }}
+          TF_VAR_identity_shared_host: ${{ vars.ECS_IDENTITY_SHARED_HOST }}
+          TF_VAR_identity_image_digest: ${{ vars.ECS_IDENTITY_IMAGE_DIGEST }}
+          TF_VAR_identity_db_instance_class: ${{ vars.ECS_IDENTITY_DB_INSTANCE_CLASS }}
+          TF_VAR_identity_bootstrap_admin_enabled: ${{ vars.ECS_IDENTITY_BOOTSTRAP_ADMIN_ENABLED }}
+          TF_VAR_identity_admin_cidrs: ${{ vars.ECS_IDENTITY_ADMIN_CIDRS_JSON }}
+          TF_VAR_identity_manage_dns: ${{ vars.ECS_IDENTITY_MANAGE_DNS }}
+          TF_VAR_identity_request_certificate: ${{ vars.ECS_IDENTITY_REQUEST_CERTIFICATE }}
+          TF_VAR_identity_dns_zone_id: ${{ vars.ECS_IDENTITY_DNS_ZONE_ID }}
+          TF_VAR_identity_certificate_arn: ${{ vars.ECS_IDENTITY_CERTIFICATE_ARN }}
+        run: |
+          # Missing GitHub variables resolve to empty strings. Let Terraform supply their defaults.
+          for name in "${!TF_VAR_identity_@}"; do
+            if [[ -z "${!name}" ]]; then unset "$name"; fi
+          done
+          if [[ -n "$ECS_CERTIFICATE_ARN" ]]; then export TF_VAR_certificate_arn="$ECS_CERTIFICATE_ARN"; fi
+          if [[ -n "$ECS_PORTAL_ORIGIN" ]]; then export TF_VAR_portal_origin="$ECS_PORTAL_ORIGIN"; fi
+          if [[ -n "$ECS_KEYCLOAK_URL" ]]; then export TF_VAR_keycloak_url="$ECS_KEYCLOAK_URL"; fi
+          if [[ -n "$ECS_IMAGE_DIGESTS_JSON" ]]; then export TF_VAR_image_digests="$ECS_IMAGE_DIGESTS_JSON"; fi
+          if [[ -n "$ECS_REDIS_USER_GROUP_ID" ]]; then export TF_VAR_redis_user_group_id="$ECS_REDIS_USER_GROUP_ID"; fi
+          terraform -chdir=terraform-ecs plan -input=false -no-color -var-file="environments/$TARGET.tfvars" -out=approved.tfplan
+          terraform -chdir=terraform-ecs show -no-color approved.tfplan > ecs-plan.txt
+          sha256sum terraform-ecs/approved.tfplan terraform-ecs/.terraform.lock.hcl > ecs-plan.sha256
+          git rev-parse HEAD > ecs-plan.commit
+          aws sts get-caller-identity --query Account --output text > ecs-plan.account
+          printf '%s\n' "$AWS_REGION" "$STATE_BUCKET" "$TARGET" > ecs-plan.state
+      - name: Retain exact plan for budget and resource review
+        uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-ecs-plan
+          path: |
+            terraform-ecs/approved.tfplan
+            terraform-ecs/.terraform.lock.hcl
+            ecs-plan.txt
+            ecs-plan.sha256
+            ecs-plan.commit
+            ecs-plan.account
+            ecs-plan.state
+          include-hidden-files: true
+          retention-days: 1
+  apply:
+    if: inputs.apply && github.ref == 'refs/heads/main'
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: ecs-${{ inputs.environment }}-apply
+    env:
+      TARGET: ${{ inputs.environment }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+      STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.sha }}' }
+      - name: Fail closed unless resource and budget review is enforced
+        uses: actions/github-script@v7
+        env:
+          TARGET_ENVIRONMENT: ecs-${{ inputs.environment }}-apply
+        with:
+          script: |
+            const { assertDeploymentEnvironment } = require('./scripts/assert-deployment-environment.cjs');
+            const response = await github.rest.repos.getEnvironment({
+              ...context.repo, environment_name: process.env.TARGET_ENVIRONMENT
+            });
+            assertDeploymentEnvironment(response.data, process.env.TARGET_ENVIRONMENT);
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.13.3 }
+      - uses: actions/download-artifact@v4
+        with: { name: reviewed-ecs-plan, path: . }
+      - name: Verify saved plan, provider lock, commit and state destination
+        run: |
+          sha256sum --check ecs-plan.sha256
+          test "$(cat ecs-plan.commit)" = "$(git rev-parse HEAD)"
+          printf '%s\n' "$AWS_REGION" "$STATE_BUCKET" "$TARGET" > ecs-apply.state
+          cmp ecs-plan.state ecs-apply.state
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.ECS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify the plan account and initialize the exact provider lock
+        run: |
+          test "$(aws sts get-caller-identity --query Account --output text)" = "$(cat ecs-plan.account)"
+          terraform -chdir=terraform-ecs init -input=false -lockfile=readonly \
+            -backend-config="bucket=$STATE_BUCKET" -backend-config="key=vortexbird/ecs/$TARGET/terraform.tfstate" \
+            -backend-config="region=$AWS_REGION" -backend-config="use_lockfile=true"
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: Verify live TLS certificates for the exact saved activation plan
+        run: |
+          umask 077
+          terraform -chdir=terraform-ecs show -json approved.tfplan > "$RUNNER_TEMP/reviewed-ecs-plan.json"
+          node scripts/preflight-identity-tls.cjs --plan-json "$RUNNER_TEMP/reviewed-ecs-plan.json" \
+            --expected-account "$(cat ecs-plan.account)" --expected-region "$AWS_REGION" \
+            --out identity-tls-preflight.json
+      - name: Apply only the exact reviewed plan
+        run: terraform -chdir=terraform-ecs apply -input=false approved.tfplan
+      - name: Remove expanded plan with potentially sensitive values
+        if: always()
+        run: node -e "require('node:fs').rmSync(process.env.RUNNER_TEMP+'/reviewed-ecs-plan.json',{force:true})"
+      - name: Retain sanitized TLS activation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-tls-preflight-${{ inputs.environment }}
+          path: identity-tls-preflight.json
+          if-no-files-found: ignore
+          retention-days: 30

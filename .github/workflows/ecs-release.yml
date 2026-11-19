@@ -1,0 +1,129 @@
+name: Reviewed ECS application release
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [development, staging, production]
+        required: true
+      operation:
+        type: choice
+        options: [release, migrate, verify]
+        default: release
+        required: true
+      backend_digest:
+        description: Reviewed backend sha256 digest already published in this environment ECR
+        type: string
+        required: true
+      frontend_digest:
+        description: Reviewed frontend sha256 digest; required for release
+        type: string
+        required: false
+      bootstrap_admin:
+        description: Explicit first installation only; requires migrate operation and protected identity configuration
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true }
+      operation: { type: string, default: release }
+      backend_digest: { type: string, required: true }
+      frontend_digest: { type: string, required: false }
+      bootstrap_admin: { type: boolean, default: false }
+    secrets:
+      ECS_BOOTSTRAP_ADMIN_JSON: { required: false }
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: vortexbird-ecs-${{ inputs.environment }}
+  cancel-in-progress: false
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.sha }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Exercise release failures and rollback without AWS
+        run: npm run test:release
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: checks
+    runs-on: ubuntu-latest
+    environment: ecs-${{ inputs.environment }}-release
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
+      AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+      TARGET: ${{ inputs.environment }}
+      OPERATION: ${{ inputs.operation }}
+      BACKEND_DIGEST: ${{ inputs.backend_digest }}
+      FRONTEND_DIGEST: ${{ inputs.frontend_digest }}
+      BOOTSTRAP_ADMIN: ${{ inputs.bootstrap_admin }}
+      RELEASE_CONTRACT_JSON: ${{ vars.ECS_RELEASE_CONTRACT_JSON }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ github.sha }}' }
+      - name: Fail closed unless release review is enforced
+        uses: actions/github-script@v7
+        env:
+          TARGET_ENVIRONMENT: ecs-${{ inputs.environment }}-release
+        with:
+          script: |
+            const { assertDeploymentEnvironment } = require('./scripts/assert-deployment-environment.cjs');
+            const response = await github.rest.repos.getEnvironment({
+              ...context.repo, environment_name: process.env.TARGET_ENVIRONMENT
+            });
+            assertDeploymentEnvironment(response.data, process.env.TARGET_ENVIRONMENT);
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - name: Validate reviewed contract before assuming credentials
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          const fs = require('node:fs');
+          const { validateConfig } = require('./scripts/release-ecs.cjs');
+          const contract = JSON.parse(process.env.RELEASE_CONTRACT_JSON);
+          assert.match(process.env.AWS_ACCOUNT_ID || '', /^\d{12}$/);
+          assert.equal(contract.accountId, process.env.AWS_ACCOUNT_ID);
+          assert.equal(contract.region, process.env.AWS_REGION);
+          assert.equal(contract.environment, process.env.TARGET);
+          validateConfig(contract, { backend:process.env.BACKEND_DIGEST, frontend:process.env.FRONTEND_DIGEST }, process.env.OPERATION);
+          if (process.env.BOOTSTRAP_ADMIN === 'true') assert.equal(process.env.OPERATION, 'migrate');
+          fs.writeFileSync(process.env.RUNNER_TEMP + '/ecs-release-contract.json', JSON.stringify(contract), {mode:0o600});
+          NODE
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.ECS_RELEASE_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+      - name: Migrate, deploy immutable images, verify health and roll back failed releases
+        env:
+          BOOTSTRAP_ADMIN_JSON: ${{ secrets.ECS_BOOTSTRAP_ADMIN_JSON }}
+        run: |
+          args=(--config "$RUNNER_TEMP/ecs-release-contract.json" --operation "$OPERATION"
+            --backend-digest "$BACKEND_DIGEST" --release-id "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+            --report ecs-release-result.json --execute)
+          if [[ "$OPERATION" != "migrate" ]]; then args+=(--frontend-digest "$FRONTEND_DIGEST"); fi
+          if [[ "$BOOTSTRAP_ADMIN" == "true" ]]; then
+            test -n "$BOOTSTRAP_ADMIN_JSON"
+            umask 077
+            printf '%s' "$BOOTSTRAP_ADMIN_JSON" > "$RUNNER_TEMP/ecs-bootstrap-admin.json"
+            args+=(--bootstrap-config "$RUNNER_TEMP/ecs-bootstrap-admin.json")
+          fi
+          node scripts/release-ecs.cjs "${args[@]}"
+      - name: Remove temporary identity and contract inputs
+        if: always()
+        run: |
+          node -e "const fs=require('node:fs'); for(const f of ['ecs-bootstrap-admin.json','ecs-release-contract.json']) fs.rmSync(process.env.RUNNER_TEMP+'/'+f,{force:true});"
+      - name: Retain release and rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ecs-release-result-${{ inputs.environment }}
+          path: ecs-release-result.json
+          if-no-files-found: ignore
+          retention-days: 30
